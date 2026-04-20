@@ -11,4 +11,14 @@ export const galleryController = {
     const items = await galleryService.listGalleryItems(req.query as Record<string, unknown>);
     return sendSuccess(res, "Gallery fetched", { items });
   }),
+  updateGalleryItem: asyncHandler(async (req, res) => {
+    const galleryId = String(req.params.galleryId);
+    const galleryItem = await galleryService.updateGalleryItem(galleryId, req.body);
+    return sendSuccess(res, "Gallery item updated", { galleryItem });
+  }),
+  deleteGalleryItem: asyncHandler(async (req, res) => {
+    const galleryId = String(req.params.galleryId);
+    const galleryItem = await galleryService.deleteGalleryItem(galleryId);
+    return sendSuccess(res, "Gallery item deleted", { galleryItem });
+  }),
 };

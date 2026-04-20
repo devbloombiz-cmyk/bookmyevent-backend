@@ -9,4 +9,8 @@ export const availabilityRepository = {
       { new: true, upsert: true },
     ),
   findByVendor: (vendorId: string) => AvailabilityModel.find({ vendorId }).sort({ date: 1 }),
+  findByVendorAndDate: (vendorId: string, date: Date) =>
+    AvailabilityModel.find({ vendorId, date }).sort({ slot: 1 }),
+  updateById: (id: string, payload: Record<string, unknown>) =>
+    AvailabilityModel.findByIdAndUpdate(id, payload, { new: true }),
 };

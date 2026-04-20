@@ -3,12 +3,21 @@ import { availabilityController } from "../controllers/availability.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { requireRoles } from "../middlewares/roles.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
-import { setAvailabilitySchema } from "../validators/availability.validator";
+import { listAvailabilitySchema, setAvailabilitySchema } from "../validators/availability.validator";
 
 const availabilityRouter = Router();
 
-availabilityRouter.get("/", requireAuth, availabilityController.listByVendor);
-availabilityRouter.get("/public", availabilityController.listByVendor);
+availabilityRouter.get(
+  "/",
+  requireAuth,
+  validateRequest(listAvailabilitySchema),
+  availabilityController.listByVendor,
+);
+availabilityRouter.get(
+  "/public",
+  validateRequest(listAvailabilitySchema),
+  availabilityController.listByVendorPublic,
+);
 availabilityRouter.post(
   "/",
   requireAuth,

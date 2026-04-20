@@ -4,7 +4,11 @@ export const galleryRepository = {
   create: (payload: Record<string, unknown>) => GalleryModel.create(payload),
   createMany: (payload: Record<string, unknown>[]) => GalleryModel.insertMany(payload),
   list: (filters: Record<string, unknown> = {}) => {
-    const query: Record<string, unknown> = { isActive: true };
+    const query: Record<string, unknown> = {};
+
+    if (filters.includeInactive !== true) {
+      query.isActive = true;
+    }
 
     if (typeof filters.category === "string" && filters.category.trim()) {
       query.category = filters.category.trim().toLowerCase();
@@ -21,4 +25,7 @@ export const galleryRepository = {
     const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(120, filters.limit)) : 60;
     return GalleryModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
+  updateById: (galleryId: string, payload: Record<string, unknown>) =>
+    GalleryModel.findByIdAndUpdate(galleryId, payload, { new: true }),
+  deleteById: (galleryId: string) => GalleryModel.findByIdAndDelete(galleryId),
 };

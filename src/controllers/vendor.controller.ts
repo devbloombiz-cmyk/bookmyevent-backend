@@ -11,4 +11,35 @@ export const vendorController = {
     const vendors = await vendorService.listVendors(req.query as Record<string, unknown>);
     return sendSuccess(res, "Vendors fetched", { vendors });
   }),
+  getMyVendorProfile: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Vendor profile not found", { vendor: null });
+    }
+
+    const vendor = await vendorService.getMyVendorProfile({ id: authUser.id, email: authUser.email });
+    return sendSuccess(res, "Vendor profile fetched", { vendor });
+  }),
+  updateMyVendorProfile: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Vendor profile not found", { vendor: null });
+    }
+
+    const vendor = await vendorService.updateMyVendorProfile(
+      { id: authUser.id, email: authUser.email },
+      req.body,
+    );
+    return sendSuccess(res, "Vendor profile updated", { vendor });
+  }),
+  updateVendor: asyncHandler(async (req, res) => {
+    const vendorId = String(req.params.vendorId);
+    const vendor = await vendorService.updateVendor(vendorId, req.body);
+    return sendSuccess(res, "Vendor updated", { vendor });
+  }),
+  deleteVendor: asyncHandler(async (req, res) => {
+    const vendorId = String(req.params.vendorId);
+    const vendor = await vendorService.deleteVendor(vendorId);
+    return sendSuccess(res, "Vendor deleted", { vendor });
+  }),
 };

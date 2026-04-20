@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { ApiError } from "../utils/api-error";
 import { asyncHandler } from "../utils/async-handler";
 import { sendSuccess } from "../utils/api-response";
+import { parseS3UploadFolder, uploadToS3 } from "../utils/s3";
 
 export const uploadController = {
   uploadImage: asyncHandler(async (req: Request, res: Response) => {
@@ -11,17 +12,20 @@ export const uploadController = {
       throw new ApiError(400, "Image file is required in form-data field 'file'");
     }
 
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/images/${file.filename}`;
+    const defaultFolder = req.authUser?.role === "vendor" ? "vendors" : "services";
+    const folder = parseS3UploadFolder(req.body?.folder, defaultFolder);
+    const uploadedFile = await uploadToS3(file, folder);
 
     return sendSuccess(
       res,
       "Image uploaded",
       {
         file: {
-          url: fileUrl,
+          url: uploadedFile.url,
           name: file.originalname,
           size: file.size,
           mimeType: file.mimetype,
+          key: uploadedFile.key,
         },
       },
       201,

@@ -6,6 +6,7 @@ const leadSchema = new Schema(
     customerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     vendorId: { type: Schema.Types.ObjectId, ref: "Vendor", required: true },
     eventDate: { type: Date, required: true },
+    eventSlot: { type: String, default: "Full Day", trim: true },
     location: { type: String, required: true, trim: true },
     message: { type: String, default: "" },
     status: { type: String, enum: LEAD_STATUSES, default: "NEW" },

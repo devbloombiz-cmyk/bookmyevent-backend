@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
+import multer from "multer";
 import { ApiError } from "../utils/api-error";
 import { logger } from "../config/logger";
 
@@ -6,7 +7,17 @@ export function notFoundMiddleware(req: Request, _res: Response, next: NextFunct
   next(new ApiError(404, `Route not found: ${req.originalUrl}`));
 }
 
-export function errorMiddleware(error: unknown, _req: Request, res: Response) {
+export function errorMiddleware(error: unknown, _req: Request, res: Response, _next: NextFunction) {
+  if (error instanceof multer.MulterError) {
+    const isFileSizeError = error.code === "LIMIT_FILE_SIZE";
+
+    return res.status(400).json({
+      success: false,
+      message: isFileSizeError ? "File size must be 2MB or smaller" : "Invalid upload request",
+      data: {},
+    });
+  }
+
   const statusCode =
     error instanceof ApiError
       ? error.statusCode

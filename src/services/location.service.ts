@@ -1,4 +1,5 @@
 import { locationRepository } from "../repositories/location.repository";
+import { ApiError } from "../utils/api-error";
 
 type DistrictRecord = {
   name: string;
@@ -55,8 +56,8 @@ export const locationService = {
 
     return stateDoc;
   },
-  listLocations: async () => {
-    const rows = (await locationRepository.findAll()) as unknown as LocationRecord[];
+  listLocations: async (includeInactive = false) => {
+    const rows = (await locationRepository.findAll(includeInactive)) as unknown as LocationRecord[];
 
     const locations: StateNode[] = rows.map((row) => ({
       state: normalizeLabel(row.state),
@@ -72,5 +73,92 @@ export const locationService = {
     }));
 
     return locations.sort((a, b) => a.state.localeCompare(b.state));
+  },
+  updateLocationEntry: async (payload: Record<string, unknown>) => {
+    const state = normalizeLabel(String(payload.state ?? ""));
+    const district = normalizeLabel(String(payload.district ?? ""));
+    const city = normalizeLabel(String(payload.city ?? ""));
+
+    const nextState = normalizeLabel(String(payload.nextState ?? ""));
+    const nextDistrict = normalizeLabel(String(payload.nextDistrict ?? ""));
+    const nextCity = normalizeLabel(String(payload.nextCity ?? ""));
+
+    const sourceDoc = await locationRepository.findByState(state, true);
+    if (!sourceDoc) {
+      throw new ApiError(404, "Source state not found");
+    }
+
+    const sourceDistrict = sourceDoc.districts.find((item) => item.name === district);
+    if (!sourceDistrict) {
+      throw new ApiError(404, "Source district not found");
+    }
+
+    if (!sourceDistrict.cities.includes(city)) {
+      throw new ApiError(404, "Source city not found");
+    }
+
+    sourceDistrict.cities = sourceDistrict.cities.filter((item) => item !== city);
+    if (!sourceDistrict.cities.length) {
+      const districtIndex = sourceDoc.districts.findIndex((item) => item.name === district);
+      if (districtIndex >= 0) {
+        sourceDoc.districts.splice(districtIndex, 1);
+      }
+    }
+    await locationRepository.save(sourceDoc);
+
+    const targetDoc = await locationRepository.findByState(nextState, true);
+    if (!targetDoc) {
+      return locationRepository.create({
+        state: nextState,
+        districts: [{ name: nextDistrict, cities: [nextCity], isActive: true }],
+        isActive: true,
+      });
+    }
+
+    const targetDistrict = targetDoc.districts.find((item) => item.name === nextDistrict);
+    if (!targetDistrict) {
+      targetDoc.districts.push({ name: nextDistrict, cities: [nextCity], isActive: true });
+    } else if (!targetDistrict.cities.includes(nextCity)) {
+      targetDistrict.cities.push(nextCity);
+      targetDistrict.cities.sort((a, b) => a.localeCompare(b));
+    }
+
+    await locationRepository.save(targetDoc);
+    return targetDoc;
+  },
+  deleteLocationEntry: async (payload: Record<string, unknown>) => {
+    const state = normalizeLabel(String(payload.state ?? ""));
+    const district = normalizeLabel(String(payload.district ?? ""));
+    const city = normalizeLabel(String(payload.city ?? ""));
+
+    const doc = await locationRepository.findByState(state, true);
+    if (!doc) {
+      throw new ApiError(404, "State not found");
+    }
+
+    const districtNode = doc.districts.find((item) => item.name === district);
+    if (!districtNode) {
+      throw new ApiError(404, "District not found");
+    }
+
+    if (!districtNode.cities.includes(city)) {
+      throw new ApiError(404, "City not found");
+    }
+
+    districtNode.cities = districtNode.cities.filter((item) => item !== city);
+    if (!districtNode.cities.length) {
+      const districtIndex = doc.districts.findIndex((item) => item.name === district);
+      if (districtIndex >= 0) {
+        doc.districts.splice(districtIndex, 1);
+      }
+    }
+
+    if (!doc.districts.length) {
+      await locationRepository.deleteById(String(doc._id));
+      return { state, deleted: true };
+    }
+
+    await locationRepository.save(doc);
+    return doc;
   },
 };

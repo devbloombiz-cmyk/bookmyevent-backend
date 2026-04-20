@@ -6,12 +6,21 @@ import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   createPlatformPackageSchema,
   createVendorPackageSchema,
+  deletePackageSchema,
+  listPlatformPackageSchema,
+  listVendorPackageSchema,
+  updatePlatformPackageSchema,
+  updateVendorPackageSchema,
 } from "../validators/package.validator";
 
 const packageRouter = Router();
 
-packageRouter.get("/vendor", packageController.listVendorPackages);
-packageRouter.get("/platform", packageController.listPlatformPackages);
+packageRouter.get("/vendor", validateRequest(listVendorPackageSchema), packageController.listVendorPackages);
+packageRouter.get(
+  "/platform",
+  validateRequest(listPlatformPackageSchema),
+  packageController.listPlatformPackages,
+);
 
 packageRouter.post(
   "/vendor",
@@ -20,6 +29,20 @@ packageRouter.post(
   validateRequest(createVendorPackageSchema),
   packageController.createVendorPackage,
 );
+packageRouter.put(
+  "/vendor/:packageId",
+  requireAuth,
+  requireRoles(["vendor", "vendor_admin", "super_admin"]),
+  validateRequest(updateVendorPackageSchema),
+  packageController.updateVendorPackage,
+);
+packageRouter.delete(
+  "/vendor/:packageId",
+  requireAuth,
+  requireRoles(["vendor", "vendor_admin", "super_admin"]),
+  validateRequest(deletePackageSchema),
+  packageController.deleteVendorPackage,
+);
 
 packageRouter.post(
   "/platform",
@@ -27,6 +50,20 @@ packageRouter.post(
   requireRoles(["super_admin", "accounts_admin", "vendor_admin"]),
   validateRequest(createPlatformPackageSchema),
   packageController.createPlatformPackage,
+);
+packageRouter.put(
+  "/platform/:packageId",
+  requireAuth,
+  requireRoles(["super_admin", "accounts_admin", "vendor_admin"]),
+  validateRequest(updatePlatformPackageSchema),
+  packageController.updatePlatformPackage,
+);
+packageRouter.delete(
+  "/platform/:packageId",
+  requireAuth,
+  requireRoles(["super_admin", "accounts_admin", "vendor_admin"]),
+  validateRequest(deletePackageSchema),
+  packageController.deletePlatformPackage,
 );
 
 export { packageRouter };

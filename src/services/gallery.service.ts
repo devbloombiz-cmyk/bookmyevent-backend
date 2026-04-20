@@ -1,8 +1,23 @@
 import { galleryRepository } from "../repositories/gallery.repository";
+import { ApiError } from "../utils/api-error";
 
 export const galleryService = {
   createGalleryItem: (payload: Record<string, unknown>) => galleryRepository.create(payload),
   listGalleryItems: (filters: Record<string, unknown>) => galleryRepository.list(filters),
+  updateGalleryItem: async (galleryId: string, payload: Record<string, unknown>) => {
+    const galleryItem = await galleryRepository.updateById(galleryId, payload);
+    if (!galleryItem) {
+      throw new ApiError(404, "Gallery item not found");
+    }
+    return galleryItem;
+  },
+  deleteGalleryItem: async (galleryId: string) => {
+    const galleryItem = await galleryRepository.deleteById(galleryId);
+    if (!galleryItem) {
+      throw new ApiError(404, "Gallery item not found");
+    }
+    return galleryItem;
+  },
   createVendorPortfolioGalleryItems: async (payload: {
     vendorId: string;
     vendorName: string;

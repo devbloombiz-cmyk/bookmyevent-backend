@@ -12,6 +12,78 @@ function fallbackEmailFromMobile(mobile: string) {
 }
 
 export const userService = {
+  getMyProfile: async (userId: string) => {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+  },
+
+  updateMyProfile: async (
+    userId: string,
+    payload: {
+      name?: string;
+      email?: string;
+      mobile?: string;
+    },
+  ) => {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    const updatePayload: { name?: string; email?: string; mobile?: string } = {};
+
+    if (payload.name) {
+      updatePayload.name = payload.name.trim();
+    }
+
+    if (payload.email) {
+      const normalizedEmail = payload.email.trim().toLowerCase();
+      const emailOwner = await userRepository.findByEmail(normalizedEmail);
+      if (emailOwner && emailOwner.id !== user.id) {
+        throw new ApiError(409, "Email already registered");
+      }
+      updatePayload.email = normalizedEmail;
+    }
+
+    if (payload.mobile) {
+      const normalizedMobile = payload.mobile.trim();
+      const mobileOwner = await userRepository.findByMobile(normalizedMobile);
+      if (mobileOwner && mobileOwner.id !== user.id) {
+        throw new ApiError(409, "Mobile number already registered");
+      }
+      updatePayload.mobile = normalizedMobile;
+    }
+
+    const updatedUser = await userRepository.updateById(userId, updatePayload);
+    if (!updatedUser) {
+      throw new ApiError(500, "Unable to update profile");
+    }
+
+    return {
+      id: updatedUser.id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      mobile: updatedUser.mobile,
+      role: updatedUser.role,
+      isActive: updatedUser.isActive,
+      createdAt: updatedUser.createdAt,
+      updatedAt: updatedUser.updatedAt,
+    };
+  },
+
   listSystemUsers: async () => {
     const admins = await Promise.all([
       userRepository.findByRole("super_admin"),

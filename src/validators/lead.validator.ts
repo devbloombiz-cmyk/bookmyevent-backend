@@ -3,7 +3,7 @@ import { LEAD_STATUSES, PAYMENT_STATUSES } from "../types/domain";
 
 export const createLeadSchema = z.object({
   body: z.object({
-    customerId: z.string().min(24).max(24),
+    customerId: z.string().min(24).max(24).optional(),
     vendorId: z.string().min(24).max(24),
     eventDate: z.coerce.date(),
     eventSlot: z.string().optional().default("Full Day"),

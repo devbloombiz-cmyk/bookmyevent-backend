@@ -16,9 +16,11 @@ export function validateRequest(schema: ZodType) {
     });
 
     if (!result.success) {
+      const firstIssue = result.error.issues[0];
+      const pathLabel = firstIssue?.path?.length ? firstIssue.path.join(".") : "request";
       return next({
         statusCode: 400,
-        message: result.error.issues[0]?.message ?? "Validation error",
+        message: firstIssue ? `${pathLabel}: ${firstIssue.message}` : "Validation error",
       });
     }
 

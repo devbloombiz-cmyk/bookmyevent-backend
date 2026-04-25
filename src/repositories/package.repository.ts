@@ -19,6 +19,7 @@ export const packageRepository = {
   createPlatformPackage: (payload: Record<string, unknown>) => PlatformPackageModel.create(payload),
   listPlatformPackages: (includeInactive = false) =>
     PlatformPackageModel.find(includeInactive ? {} : { isActive: true }).sort({ createdAt: -1 }),
+  findPlatformPackageById: (packageId: string) => PlatformPackageModel.findById(packageId),
   updateVendorPackage: (packageId: string, payload: Record<string, unknown>) =>
     VendorPackageModel.findByIdAndUpdate(packageId, payload, { new: true }),
   findVendorPackageById: (packageId: string) => VendorPackageModel.findById(packageId),

@@ -14,6 +14,14 @@ npm install
 cp ../.env.example .env
 ```
 
+Required OTP/Brevo variables:
+
+- `MONGO_URI`
+- `BREVO_API_KEY`
+- `SENDER_EMAIL`
+- `SENDER_NAME`
+- `OTP_EXPIRY_MINUTES`
+
 3. Start dev server:
 
 ```bash
@@ -65,6 +73,11 @@ Primary routes:
 - `/api/v1/leads`
 - `/api/v1/availability`
 - `/api/v1/bookings`
+
+Email OTP endpoints:
+
+- `POST /api/v1/auth/send-otp`
+- `POST /api/v1/auth/verify-otp`
 
 ## Structure
 

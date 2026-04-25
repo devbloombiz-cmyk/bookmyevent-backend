@@ -5,8 +5,21 @@ import { hashPassword } from "../utils/password";
 import { ApiError } from "../utils/api-error";
 import { galleryService } from "./gallery.service";
 import { locationService } from "./location.service";
+import type { UserRole } from "../types/domain";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const normalizeUrl = (value: unknown) => {
+  const url = normalizeText(value);
+  if (!url) {
+    return "";
+  }
+
+  try {
+    return new URL(url).toString();
+  } catch {
+    return "";
+  }
+};
 
 const textFields = [
   "businessName",
@@ -50,6 +63,19 @@ const buildNormalizedVendorPayload = (
           .map((item) => item.trim())
           .filter(Boolean)
       : [];
+  }
+
+  if (!options.partial || "socialLinks" in payload) {
+    const links =
+      typeof payload.socialLinks === "object" && payload.socialLinks !== null
+        ? (payload.socialLinks as Record<string, unknown>)
+        : {};
+
+    normalized.socialLinks = {
+      facebook: normalizeUrl(links.facebook),
+      instagram: normalizeUrl(links.instagram),
+      youtube: normalizeUrl(links.youtube),
+    };
   }
 
   if (!options.partial || "portfolioImages" in payload) {
@@ -123,8 +149,24 @@ const syncLocationIfPresent = async (payload: Record<string, unknown>) => {
 };
 
 export const vendorService = {
-  createVendor: async (payload: Record<string, unknown>) => {
+  createVendor: async (
+    payload: Record<string, unknown>,
+    options?: { requestedByRole?: UserRole },
+  ) => {
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: false });
+
+    const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
+    const isPrivilegedCreator = options?.requestedByRole
+      ? privilegedCreatorRoles.includes(options.requestedByRole)
+      : false;
+
+    if (!isPrivilegedCreator) {
+      normalizedPayload.approvalStatus = "pending";
+      normalizedPayload.isVerified = false;
+      if (!("isActive" in normalizedPayload)) {
+        normalizedPayload.isActive = true;
+      }
+    }
 
     await Promise.all([ensureVendorUserAccount(normalizedPayload), syncLocationIfPresent(normalizedPayload)]);
 
@@ -146,6 +188,18 @@ export const vendorService = {
     return vendor;
   },
   listVendors: (filters: Record<string, unknown>) => vendorRepository.findAll(filters),
+  getVendorById: async (vendorId: string, includeInactive = false) => {
+    const vendor = await vendorRepository.findById(vendorId);
+    if (!vendor) {
+      throw new ApiError(404, "Vendor not found");
+    }
+
+    if (!includeInactive && (!vendor.isActive || vendor.approvalStatus !== "active")) {
+      throw new ApiError(404, "Vendor not found");
+    }
+
+    return vendor;
+  },
   getMyVendorProfile: async (authUser: { id: string; email: string }) => {
     const user = await userRepository.findById(authUser.id);
     if (!user) {

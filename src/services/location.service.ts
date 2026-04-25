@@ -4,6 +4,7 @@ import { ApiError } from "../utils/api-error";
 type DistrictRecord = {
   name: string;
   cities: string[];
+  imageUrl?: string;
   isActive?: boolean;
 };
 
@@ -16,6 +17,7 @@ type LocationRecord = {
 type DistrictNode = {
   name: string;
   cities: string[];
+  imageUrl?: string;
 };
 
 type StateNode = {
@@ -30,22 +32,32 @@ export const locationService = {
     const state = normalizeLabel(String(payload.state ?? "Kerala"));
     const district = normalizeLabel(String(payload.district ?? ""));
     const city = normalizeLabel(String(payload.city ?? ""));
+    const districtImageUrl = normalizeLabel(String(payload.districtImageUrl ?? ""));
 
     const stateDoc = await locationRepository.findByState(state);
 
     if (!stateDoc) {
       return locationRepository.create({
         state,
-        districts: [{ name: district, cities: [city], isActive: true }],
+        districts: [{ name: district, cities: [city], imageUrl: districtImageUrl, isActive: true }],
         isActive: true,
       });
     }
 
     const districtNode = stateDoc.districts.find((item) => item.name === district);
     if (!districtNode) {
-      stateDoc.districts.push({ name: district, cities: [city], isActive: true });
+      stateDoc.districts.push({
+        name: district,
+        cities: [city],
+        imageUrl: districtImageUrl,
+        isActive: true,
+      });
       await locationRepository.save(stateDoc);
       return stateDoc;
+    }
+
+    if (districtImageUrl) {
+      districtNode.imageUrl = districtImageUrl;
     }
 
     if (!districtNode.cities.includes(city)) {
@@ -68,6 +80,7 @@ export const locationService = {
           cities: [...new Set((district.cities ?? []).map(normalizeLabel))].sort((a, b) =>
             a.localeCompare(b),
           ),
+          imageUrl: normalizeLabel(district.imageUrl ?? ""),
         }))
         .sort((a, b) => a.name.localeCompare(b.name)),
     }));
@@ -82,6 +95,7 @@ export const locationService = {
     const nextState = normalizeLabel(String(payload.nextState ?? ""));
     const nextDistrict = normalizeLabel(String(payload.nextDistrict ?? ""));
     const nextCity = normalizeLabel(String(payload.nextCity ?? ""));
+    const districtImageUrl = normalizeLabel(String(payload.districtImageUrl ?? ""));
 
     const sourceDoc = await locationRepository.findByState(state, true);
     if (!sourceDoc) {
@@ -110,17 +124,33 @@ export const locationService = {
     if (!targetDoc) {
       return locationRepository.create({
         state: nextState,
-        districts: [{ name: nextDistrict, cities: [nextCity], isActive: true }],
+        districts: [
+          {
+            name: nextDistrict,
+            cities: [nextCity],
+            imageUrl: districtImageUrl,
+            isActive: true,
+          },
+        ],
         isActive: true,
       });
     }
 
     const targetDistrict = targetDoc.districts.find((item) => item.name === nextDistrict);
     if (!targetDistrict) {
-      targetDoc.districts.push({ name: nextDistrict, cities: [nextCity], isActive: true });
+      targetDoc.districts.push({
+        name: nextDistrict,
+        cities: [nextCity],
+        imageUrl: districtImageUrl,
+        isActive: true,
+      });
     } else if (!targetDistrict.cities.includes(nextCity)) {
       targetDistrict.cities.push(nextCity);
       targetDistrict.cities.sort((a, b) => a.localeCompare(b));
+    }
+
+    if (districtImageUrl && targetDistrict) {
+      targetDistrict.imageUrl = districtImageUrl;
     }
 
     await locationRepository.save(targetDoc);

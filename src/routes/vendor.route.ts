@@ -20,10 +20,13 @@ vendorRouter.get(
   requireRoles(["vendor"]),
   vendorController.getMyVendorProfile,
 );
+vendorRouter.get(
+  "/:vendorId",
+  validateRequest(vendorDeleteSchema),
+  vendorController.getVendorById,
+);
 vendorRouter.post(
   "/",
-  requireAuth,
-  requireRoles(["vendor", "vendor_admin", "accounts_admin", "super_admin"]),
   validateRequest(vendorCreateSchema),
   vendorController.createVendor,
 );

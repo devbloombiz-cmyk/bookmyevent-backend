@@ -13,6 +13,14 @@ export const userRepository = {
   create: (payload: CreateUserPayload) => UserModel.create(payload),
   findByEmail: (email: string) => UserModel.findOne({ email: email.toLowerCase() }),
   findByMobile: (mobile: string) => UserModel.findOne({ mobile: mobile.trim() }),
+  findByEmailOrMobile: (identifier: string) => {
+    const normalizedIdentifier = identifier.trim();
+    const isEmailIdentifier = normalizedIdentifier.includes("@");
+
+    return isEmailIdentifier
+      ? UserModel.findOne({ email: normalizedIdentifier.toLowerCase() })
+      : UserModel.findOne({ mobile: normalizedIdentifier });
+  },
   findById: (id: string) => UserModel.findById(id),
   findByRole: (role: UserRole) => UserModel.find({ role }).sort({ createdAt: -1 }),
   findAnyByRole: (role: UserRole) => UserModel.findOne({ role }),

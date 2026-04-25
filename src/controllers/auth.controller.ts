@@ -30,12 +30,12 @@ export const authController = {
 
   requestOtp: asyncHandler(async (req, res) => {
     const result = await authService.requestLoginOtp(req.body);
-    return sendSuccess(res, "OTP sent", result);
+    return sendSuccess(res, "OTP sent to email", result);
   }),
 
   verifyOtp: asyncHandler(async (req, res) => {
     const result = await authService.verifyLoginOtp(req.body);
-    return sendSuccess(res, "Login successful", result);
+    return sendSuccess(res, "OTP verified", result);
   }),
 
   refreshToken: asyncHandler(async (req, res) => {

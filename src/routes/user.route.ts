@@ -3,9 +3,17 @@ import { userController } from "../controllers/user.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { requireRoles } from "../middlewares/roles.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
-import { createSubAdminSchema, listSystemUsersSchema } from "../validators/user.validator";
+import {
+  createSubAdminSchema,
+  getMyProfileSchema,
+  listSystemUsersSchema,
+  updateMyProfileSchema,
+} from "../validators/user.validator";
 
 const userRouter = Router();
+
+userRouter.get("/me", requireAuth, validateRequest(getMyProfileSchema), userController.getMyProfile);
+userRouter.patch("/me", requireAuth, validateRequest(updateMyProfileSchema), userController.updateMyProfile);
 
 userRouter.get(
   "/system-users",

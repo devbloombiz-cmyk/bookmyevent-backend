@@ -12,6 +12,12 @@ import {
   updatePlatformPackageSchema,
   updateVendorPackageSchema,
 } from "../validators/package.validator";
+import { platformPackageLeadController } from "../controllers/platform-package-lead.controller";
+import {
+  createPlatformPackageLeadSchema,
+  listPlatformPackageLeadSchema,
+  updatePlatformPackageLeadSchema,
+} from "../validators/platform-package-lead.validator";
 
 const packageRouter = Router();
 
@@ -20,6 +26,25 @@ packageRouter.get(
   "/platform",
   validateRequest(listPlatformPackageSchema),
   packageController.listPlatformPackages,
+);
+packageRouter.post(
+  "/platform-leads",
+  validateRequest(createPlatformPackageLeadSchema),
+  platformPackageLeadController.createLead,
+);
+packageRouter.get(
+  "/platform-leads",
+  requireAuth,
+  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  validateRequest(listPlatformPackageLeadSchema),
+  platformPackageLeadController.listLeads,
+);
+packageRouter.put(
+  "/platform-leads/:leadId",
+  requireAuth,
+  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  validateRequest(updatePlatformPackageLeadSchema),
+  platformPackageLeadController.updateLead,
 );
 
 packageRouter.post(

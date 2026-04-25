@@ -4,12 +4,20 @@ import { asyncHandler } from "../utils/async-handler";
 
 export const vendorController = {
   createVendor: asyncHandler(async (req, res) => {
-    const vendor = await vendorService.createVendor(req.body);
+    const vendor = await vendorService.createVendor(req.body, {
+      requestedByRole: req.authUser?.role,
+    });
     return sendSuccess(res, "Vendor created", { vendor }, 201);
   }),
   listVendors: asyncHandler(async (req, res) => {
     const vendors = await vendorService.listVendors(req.query as Record<string, unknown>);
     return sendSuccess(res, "Vendors fetched", { vendors });
+  }),
+  getVendorById: asyncHandler(async (req, res) => {
+    const vendorId = String(req.params.vendorId);
+    const includeInactive = req.query.includeInactive === "true";
+    const vendor = await vendorService.getVendorById(vendorId, includeInactive);
+    return sendSuccess(res, "Vendor fetched", { vendor });
   }),
   getMyVendorProfile: asyncHandler(async (req, res) => {
     const authUser = req.authUser;

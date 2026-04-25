@@ -8,6 +8,7 @@ const locationSchema = new Schema(
         {
           name: { type: String, required: true, trim: true },
           cities: { type: [String], default: [] },
+          imageUrl: { type: String, default: "", trim: true },
           isActive: { type: Boolean, default: true },
         },
       ],

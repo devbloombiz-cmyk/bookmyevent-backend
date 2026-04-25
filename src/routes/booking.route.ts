@@ -14,7 +14,7 @@ const bookingRouter = Router();
 bookingRouter.get(
   "/",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  requireRoles(["customer", "vendor", "vendor_admin", "super_admin", "accounts_admin"]),
   validateRequest(bookingListSchema),
   bookingController.listBookings,
 );

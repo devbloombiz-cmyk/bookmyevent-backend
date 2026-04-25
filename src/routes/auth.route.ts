@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authController } from "../controllers/auth.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
+import { otpSendRateLimit } from "../middlewares/otp-rate-limit.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   customerSignupSchema,
@@ -19,7 +20,8 @@ authRouter.post("/signup/vendor", validateRequest(vendorSignupSchema), authContr
 authRouter.post("/login/customer", validateRequest(loginSchema), authController.loginCustomer);
 authRouter.post("/login/vendor", validateRequest(loginSchema), authController.loginVendor);
 authRouter.post("/login/admin", validateRequest(loginSchema), authController.loginAdmin);
-authRouter.post("/request-otp", validateRequest(requestOtpSchema), authController.requestOtp);
+authRouter.post("/send-otp", otpSendRateLimit, validateRequest(requestOtpSchema), authController.requestOtp);
+authRouter.post("/request-otp", otpSendRateLimit, validateRequest(requestOtpSchema), authController.requestOtp);
 authRouter.post("/verify-otp", validateRequest(verifyOtpSchema), authController.verifyOtp);
 authRouter.post("/refresh-token", validateRequest(refreshTokenSchema), authController.refreshToken);
 authRouter.post("/logout", requireAuth, authController.logout);

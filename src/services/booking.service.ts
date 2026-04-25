@@ -27,6 +27,10 @@ export const bookingService = {
     return bookingRepository.create(payload);
   },
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
+    if (authUser.role === "customer") {
+      return bookingRepository.findByCustomer(authUser.id);
+    }
+
     if (authUser.role === "vendor") {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       return bookingRepository.findByVendor(vendorId);

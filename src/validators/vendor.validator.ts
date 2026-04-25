@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+const socialLinksSchema = z
+  .object({
+    facebook: z.union([z.url(), z.literal("")]).optional().default(""),
+    instagram: z.union([z.url(), z.literal("")]).optional().default(""),
+    youtube: z.union([z.url(), z.literal("")]).optional().default(""),
+  })
+  .optional()
+  .default({});
+
 export const vendorCreateSchema = z.object({
   body: z.object({
     businessName: z.string().min(2),
@@ -14,6 +23,7 @@ export const vendorCreateSchema = z.object({
     locationDisplayName: z.string().optional().default(""),
     locationInputMode: z.enum(["collection", "manual"]).optional().default("collection"),
     serviceZones: z.array(z.string()).default([]),
+    socialLinks: socialLinksSchema,
     description: z.string().default(""),
     paymentTerms: z.string().optional().default(""),
     travelCost: z.string().optional().default(""),
@@ -44,6 +54,7 @@ export const vendorUpdateSchema = z.object({
       locationDisplayName: z.string().optional(),
       locationInputMode: z.enum(["collection", "manual"]).optional(),
       serviceZones: z.array(z.string()).optional(),
+      socialLinks: socialLinksSchema,
       description: z.string().optional(),
       paymentTerms: z.string().optional(),
       travelCost: z.string().optional(),
@@ -85,6 +96,7 @@ export const vendorSelfUpdateSchema = z.object({
       locationDisplayName: z.string().optional(),
       locationInputMode: z.enum(["collection", "manual"]).optional(),
       serviceZones: z.array(z.string()).optional(),
+      socialLinks: socialLinksSchema,
       description: z.string().optional(),
       paymentTerms: z.string().optional(),
       travelCost: z.string().optional(),

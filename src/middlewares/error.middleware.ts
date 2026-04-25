@@ -32,7 +32,9 @@ export function errorMiddleware(error: unknown, _req: Request, res: Response, _n
         ? String((error as { message: string }).message)
         : "Internal Server Error";
 
-  const safeMessage = statusCode >= 500 ? "Something went wrong" : fullMessage;
+  const shouldExposeServerError = process.env.NODE_ENV === "development";
+  const safeMessage =
+    statusCode >= 500 && !shouldExposeServerError ? "Something went wrong" : fullMessage;
 
   logger.error({ error }, "Request failed");
   res.status(statusCode).json({

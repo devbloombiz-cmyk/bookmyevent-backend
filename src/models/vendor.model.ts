@@ -18,6 +18,11 @@ const vendorSchema = new Schema(
       default: "collection",
     },
     serviceZones: { type: [String], default: [] },
+    socialLinks: {
+      facebook: { type: String, default: "", trim: true },
+      instagram: { type: String, default: "", trim: true },
+      youtube: { type: String, default: "", trim: true },
+    },
     description: { type: String, default: "" },
     paymentTerms: { type: String, default: "", trim: true },
     travelCost: { type: String, default: "", trim: true },

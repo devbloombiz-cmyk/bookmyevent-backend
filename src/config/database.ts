@@ -4,7 +4,12 @@ import { logger } from "./logger";
 
 export async function connectToDatabase() {
   try {
-    await mongoose.connect(env.MONGODB_URI);
+    await mongoose.connect(env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      maxPoolSize: 20,
+      minPoolSize: 5,
+    });
     logger.info("MongoDB connected");
   } catch (error) {
     logger.error({ error }, "MongoDB connection failed");

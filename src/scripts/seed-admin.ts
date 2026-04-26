@@ -35,7 +35,7 @@ async function seedAdmin() {
     isActive: true,
   });
 
-  console.log(`Super admin ready. Login with email (${adminEmail}) or mobile (${adminMobile}).`);
+  console.warn(`Super admin ready. Login with email (${adminEmail}) or mobile (${adminMobile}).`);
   process.exit(0);
 }
 

@@ -26,7 +26,8 @@ export function validateRequest(schema: ZodType) {
 
     const parsed = result.data as ParsedRequest;
     req.body = parsed.body;
-    // Avoid mutating req.query / req.params because Express 5 may expose getter-backed objects.
+    Object.assign(req.query as object, parsed.query as object);
+    Object.assign(req.params as object, parsed.params as object);
 
     return next();
   };

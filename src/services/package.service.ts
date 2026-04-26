@@ -1,17 +1,17 @@
 import { packageRepository } from "../repositories/package.repository";
-import type { UserRole } from "../types/domain";
+import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
 
 type AuthUser = {
   id: string;
   email: string;
-  role: UserRole;
+  permissions: PermissionKey[];
 };
 
 export const packageService = {
   createVendorPackage: async (payload: Record<string, unknown>, authUser: AuthUser) => {
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.PackageVendorCreateOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       return packageRepository.createVendorPackage({ ...payload, vendorId });
     }
@@ -23,7 +23,7 @@ export const packageService = {
     includeInactive = false,
     authUser?: AuthUser,
   ) => {
-    if (authUser?.role === "vendor") {
+    if (authUser?.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const ownVendorId = await resolveVendorIdForAuthUser(authUser);
       return packageRepository.listVendorPackages(ownVendorId, true);
     }
@@ -36,7 +36,7 @@ export const packageService = {
       throw new ApiError(404, "Vendor package not found");
     }
 
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.PackageVendorUpdateOwn)) {
       const ownVendorId = await resolveVendorIdForAuthUser(authUser);
       if (String(existing.vendorId) !== ownVendorId) {
         throw new ApiError(403, "You are not allowed to update this package");
@@ -51,7 +51,7 @@ export const packageService = {
     return vendorPackage;
   },
   deleteVendorPackage: async (packageId: string, authUser: AuthUser) => {
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.PackageVendorDeleteOwn)) {
       const existing = await packageRepository.findVendorPackageById(packageId);
       if (!existing) {
         throw new ApiError(404, "Vendor package not found");

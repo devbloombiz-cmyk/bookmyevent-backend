@@ -7,7 +7,11 @@ const socialLinksSchema = z
     youtube: z.union([z.url(), z.literal("")]).optional().default(""),
   })
   .optional()
-  .default({});
+  .default({
+    facebook: "",
+    instagram: "",
+    youtube: "",
+  });
 
 export const vendorCreateSchema = z.object({
   body: z.object({

@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { leadController } from "../controllers/lead.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   convertLeadToBookingSchema,
@@ -15,7 +16,7 @@ const leadRouter = Router();
 leadRouter.get(
   "/",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize([PermissionKeys.LeadReadOwnVendor, PermissionKeys.LeadReadAny]),
   validateRequest(listLeadSchema),
   leadController.listLeads,
 );
@@ -24,14 +25,14 @@ leadRouter.post("/", requireAuth, validateRequest(createLeadSchema), leadControl
 leadRouter.put(
   "/:leadId",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize([PermissionKeys.LeadUpdateOwnVendor, PermissionKeys.LeadUpdateAny]),
   validateRequest(updateLeadSchema),
   leadController.updateLead,
 );
 leadRouter.post(
   "/:leadId/convert-booking",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize([PermissionKeys.LeadConvertOwnVendor, PermissionKeys.LeadConvertAny]),
   validateRequest(convertLeadToBookingSchema),
   leadController.convertLeadToBooking,
 );

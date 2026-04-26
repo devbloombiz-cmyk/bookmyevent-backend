@@ -6,6 +6,16 @@ import { app } from "./app";
 
 dotenv.config();
 
+process.on("unhandledRejection", (reason) => {
+  logger.error({ reason }, "Unhandled promise rejection");
+  process.exit(1);
+});
+
+process.on("uncaughtException", (error) => {
+  logger.error({ error }, "Uncaught exception");
+  process.exit(1);
+});
+
 async function bootstrap() {
   await connectToDatabase();
 

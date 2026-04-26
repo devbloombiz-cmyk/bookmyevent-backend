@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { categoryController } from "../controllers/category.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   categoryCreateSchema,
@@ -18,42 +19,42 @@ categoryRouter.get("/", categoryController.listCategories);
 categoryRouter.post(
   "/",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.CategoryManage),
   validateRequest(categoryCreateSchema),
   categoryController.createCategory,
 );
 categoryRouter.put(
   "/:categoryId",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.CategoryManage),
   validateRequest(categoryUpdateSchema),
   categoryController.updateCategory,
 );
 categoryRouter.delete(
   "/:categoryId",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.CategoryManage),
   validateRequest(categoryDeleteSchema),
   categoryController.deleteCategory,
 );
 categoryRouter.post(
   "/:categoryId/sub-categories",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.CategoryManage),
   validateRequest(subCategoryBulkCreateSchema),
   categoryController.addSubCategories,
 );
 categoryRouter.put(
   "/:categoryId/sub-categories/:subCategoryId",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.CategoryManage),
   validateRequest(subCategoryUpdateSchema),
   categoryController.updateSubCategory,
 );
 categoryRouter.delete(
   "/:categoryId/sub-categories/:subCategoryId",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.CategoryManage),
   validateRequest(subCategoryDeleteSchema),
   categoryController.deleteSubCategory,
 );

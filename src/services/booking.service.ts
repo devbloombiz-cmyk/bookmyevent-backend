@@ -1,13 +1,13 @@
 import { bookingRepository } from "../repositories/booking.repository";
 import { availabilityRepository } from "../repositories/availability.repository";
-import type { UserRole } from "../types/domain";
+import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
 
 type AuthUser = {
   id: string;
   email: string;
-  role: UserRole;
+  permissions: PermissionKey[];
 };
 
 const validBookingTransitions: Record<string, string[]> = {
@@ -19,7 +19,7 @@ const validBookingTransitions: Record<string, string[]> = {
 
 export const bookingService = {
   createBooking: async (payload: Record<string, unknown>, authUser: AuthUser) => {
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       return bookingRepository.create({ ...payload, vendorId });
     }
@@ -27,11 +27,11 @@ export const bookingService = {
     return bookingRepository.create(payload);
   },
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
-    if (authUser.role === "customer") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)) {
       return bookingRepository.findByCustomer(authUser.id);
     }
 
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       return bookingRepository.findByVendor(vendorId);
     }
@@ -48,7 +48,7 @@ export const bookingService = {
       throw new ApiError(404, "Booking not found");
     }
 
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       if (String(existing.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to update this booking");

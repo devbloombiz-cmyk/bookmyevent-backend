@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { userController } from "../controllers/user.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   createSubAdminSchema,
@@ -18,7 +19,7 @@ userRouter.patch("/me", requireAuth, validateRequest(updateMyProfileSchema), use
 userRouter.get(
   "/system-users",
   requireAuth,
-  requireRoles(["super_admin"]),
+  authorize(PermissionKeys.UserSystemRead),
   validateRequest(listSystemUsersSchema),
   userController.listSystemUsers,
 );
@@ -26,7 +27,7 @@ userRouter.get(
 userRouter.post(
   "/system-users",
   requireAuth,
-  requireRoles(["super_admin"]),
+  authorize(PermissionKeys.UserSystemCreate),
   validateRequest(createSubAdminSchema),
   userController.createSubAdmin,
 );

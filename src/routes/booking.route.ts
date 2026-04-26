@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { bookingController } from "../controllers/booking.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   bookingCreateSchema,
@@ -14,7 +15,11 @@ const bookingRouter = Router();
 bookingRouter.get(
   "/",
   requireAuth,
-  requireRoles(["customer", "vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize([
+    PermissionKeys.BookingReadOwnCustomer,
+    PermissionKeys.BookingReadOwnVendor,
+    PermissionKeys.BookingReadAny,
+  ]),
   validateRequest(bookingListSchema),
   bookingController.listBookings,
 );
@@ -22,7 +27,7 @@ bookingRouter.post("/", requireAuth, validateRequest(bookingCreateSchema), booki
 bookingRouter.put(
   "/:bookingId",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingUpdateSchema),
   bookingController.updateBooking,
 );

@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { availabilityController } from "../controllers/availability.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import { listAvailabilitySchema, setAvailabilitySchema } from "../validators/availability.validator";
 
@@ -21,7 +22,7 @@ availabilityRouter.get(
 availabilityRouter.post(
   "/",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin"]),
+  authorize([PermissionKeys.AvailabilityWriteOwn, PermissionKeys.AvailabilityWriteAny]),
   validateRequest(setAvailabilitySchema),
   availabilityController.setAvailability,
 );

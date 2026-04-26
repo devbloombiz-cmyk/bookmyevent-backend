@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { galleryController } from "../controllers/gallery.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   createGallerySchema,
@@ -17,21 +18,21 @@ galleryRouter.get("/", validateRequest(listGallerySchema), galleryController.lis
 galleryRouter.post(
   "/",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize(PermissionKeys.GalleryWrite),
   validateRequest(createGallerySchema),
   galleryController.createGalleryItem,
 );
 galleryRouter.put(
   "/:galleryId",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize(PermissionKeys.GalleryWrite),
   validateRequest(updateGallerySchema),
   galleryController.updateGalleryItem,
 );
 galleryRouter.delete(
   "/:galleryId",
   requireAuth,
-  requireRoles(["vendor", "vendor_admin", "super_admin", "accounts_admin"]),
+  authorize(PermissionKeys.GalleryWrite),
   validateRequest(deleteGallerySchema),
   galleryController.deleteGalleryItem,
 );

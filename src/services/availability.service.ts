@@ -1,16 +1,16 @@
 import { availabilityRepository } from "../repositories/availability.repository";
-import type { UserRole } from "../types/domain";
+import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
 
 type AuthUser = {
   id: string;
   email: string;
-  role: UserRole;
+  permissions: PermissionKey[];
 };
 
 async function resolveTargetVendorIdForWrite(payloadVendorId: string | undefined, authUser: AuthUser) {
-  if (authUser.role === "vendor") {
+  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
     return resolveVendorIdForAuthUser(authUser);
   }
 
@@ -32,7 +32,7 @@ async function resolveTargetVendorIdForList(
     return queryVendorId;
   }
 
-  if (authUser.role === "vendor") {
+  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
     return resolveVendorIdForAuthUser(authUser);
   }
 

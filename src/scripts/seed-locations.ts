@@ -76,13 +76,11 @@ async function seedLocations() {
     }
   }
 
-  // eslint-disable-next-line no-console
-  console.log(`Location master seeded for Kerala: ${keralaDistrictCityMap.length} districts`);
+  console.warn(`Location master seeded for Kerala: ${keralaDistrictCityMap.length} districts`);
   process.exit(0);
 }
 
 seedLocations().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error("Failed to seed location master", error);
   process.exit(1);
 });

@@ -34,10 +34,26 @@ const envSchema = z
     RAZORPAY_KEY_ID: z.string().optional(),
     RAZORPAY_KEY_SECRET: z.string().optional(),
     REDIS_URL: z.string().optional(),
+    ALLOWED_ORIGINS: z.string().optional(),
+    TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(1),
+    API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(60_000).default(15 * 60 * 1000),
+    API_RATE_LIMIT_MAX: z.coerce.number().int().min(20).default(200),
+    AUTH_COOKIE_DOMAIN: z.string().optional(),
+    AUTH_COOKIE_SECURE: z
+      .string()
+      .optional()
+      .transform((value) => value !== "false"),
+    AUTH_ACCESS_COOKIE_NAME: z.string().optional(),
+    AUTH_REFRESH_COOKIE_NAME: z.string().optional(),
+    AUTH_CSRF_COOKIE_NAME: z.string().optional(),
   })
   .transform((rawEnv) => ({
     ...rawEnv,
     MONGODB_URI: rawEnv.MONGO_URI ?? rawEnv.MONGODB_URI,
+    ALLOWED_ORIGINS: (rawEnv.ALLOWED_ORIGINS ?? "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean),
   }));
 
 const parsedEnv = envSchema.parse(process.env);
@@ -60,5 +76,12 @@ export const env = {
   SMTP_PORT: parsedEnv.SMTP_PORT ?? 587,
   FROM_EMAIL: parsedEnv.FROM_EMAIL ?? parsedEnv.SENDER_EMAIL,
   OTP_DEV_FALLBACK_ENABLED:
-    parsedEnv.OTP_DEV_FALLBACK_ENABLED || parsedEnv.NODE_ENV !== "production",
+    parsedEnv.NODE_ENV !== "production" && Boolean(parsedEnv.OTP_DEV_FALLBACK_ENABLED),
+  AUTH_COOKIE_SECURE:
+    parsedEnv.AUTH_COOKIE_SECURE !== undefined
+      ? Boolean(parsedEnv.AUTH_COOKIE_SECURE)
+      : parsedEnv.NODE_ENV === "production",
+  AUTH_ACCESS_COOKIE_NAME: parsedEnv.AUTH_ACCESS_COOKIE_NAME ?? "bme_access",
+  AUTH_REFRESH_COOKIE_NAME: parsedEnv.AUTH_REFRESH_COOKIE_NAME ?? "bme_refresh",
+  AUTH_CSRF_COOKIE_NAME: parsedEnv.AUTH_CSRF_COOKIE_NAME ?? "bme_csrf",
 };

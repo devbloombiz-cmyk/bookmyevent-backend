@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { locationController } from "../controllers/location.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   createLocationSchema,
@@ -17,21 +18,21 @@ locationRouter.get("/", validateRequest(listLocationSchema), locationController.
 locationRouter.post(
   "/",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.LocationManage),
   validateRequest(createLocationSchema),
   locationController.createLocation,
 );
 locationRouter.put(
   "/entry",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.LocationManage),
   validateRequest(updateLocationEntrySchema),
   locationController.updateLocationEntry,
 );
 locationRouter.delete(
   "/entry",
   requireAuth,
-  requireRoles(["super_admin", "vendor_admin", "accounts_admin"]),
+  authorize(PermissionKeys.LocationManage),
   validateRequest(deleteLocationEntrySchema),
   locationController.deleteLocationEntry,
 );

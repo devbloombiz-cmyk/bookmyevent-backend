@@ -1,7 +1,8 @@
 import { Router } from "express";
+import { PermissionKeys } from "../config/permissions";
 import { vendorController } from "../controllers/vendor.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { requireRoles } from "../middlewares/roles.middleware";
+import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   vendorCreateSchema,
@@ -17,7 +18,7 @@ vendorRouter.get("/", validateRequest(vendorListSchema), vendorController.listVe
 vendorRouter.get(
   "/me",
   requireAuth,
-  requireRoles(["vendor"]),
+  authorize([PermissionKeys.VendorUpdateOwn, PermissionKeys.VendorUpdateAny]),
   vendorController.getMyVendorProfile,
 );
 vendorRouter.get(
@@ -33,21 +34,21 @@ vendorRouter.post(
 vendorRouter.put(
   "/me",
   requireAuth,
-  requireRoles(["vendor"]),
+  authorize([PermissionKeys.VendorUpdateOwn, PermissionKeys.VendorUpdateAny]),
   validateRequest(vendorSelfUpdateSchema),
   vendorController.updateMyVendorProfile,
 );
 vendorRouter.put(
   "/:vendorId",
   requireAuth,
-  requireRoles(["vendor_admin", "accounts_admin", "super_admin"]),
+  authorize(PermissionKeys.VendorUpdateAny),
   validateRequest(vendorUpdateSchema),
   vendorController.updateVendor,
 );
 vendorRouter.delete(
   "/:vendorId",
   requireAuth,
-  requireRoles(["vendor_admin", "accounts_admin", "super_admin"]),
+  authorize(PermissionKeys.VendorDeleteAny),
   validateRequest(vendorDeleteSchema),
   vendorController.deleteVendor,
 );

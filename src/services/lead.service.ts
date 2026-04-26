@@ -1,5 +1,5 @@
 import { leadRepository } from "../repositories/lead.repository";
-import type { UserRole } from "../types/domain";
+import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import { ApiError } from "../utils/api-error";
 import { bookingRepository } from "../repositories/booking.repository";
 import { availabilityRepository } from "../repositories/availability.repository";
@@ -8,7 +8,7 @@ import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
 type AuthUser = {
   id: string;
   email: string;
-  role: UserRole;
+  permissions: PermissionKey[];
 };
 
 const validLeadTransitions: Record<string, string[]> = {
@@ -24,7 +24,7 @@ const validLeadTransitions: Record<string, string[]> = {
 };
 
 async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: string) {
-  if (authUser.role === "vendor") {
+  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
     return resolveVendorIdForAuthUser(authUser);
   }
 
@@ -38,7 +38,9 @@ export const leadService = {
       throw new ApiError(400, "vendorId is required");
     }
 
-    const customerId = authUser.role === "customer" ? authUser.id : String(payload.customerId ?? "");
+    const customerId = authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)
+      ? authUser.id
+      : String(payload.customerId ?? "");
     if (!customerId) {
       throw new ApiError(400, "customerId is required");
     }
@@ -46,7 +48,7 @@ export const leadService = {
     return leadRepository.create({ ...payload, vendorId, customerId });
   },
   listLeads: async (authUser: AuthUser, filters: Record<string, unknown>) => {
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       return leadRepository.findByVendor(vendorId);
     }
@@ -63,7 +65,7 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       if (String(existingLead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to update this lead");
@@ -95,7 +97,7 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (authUser.role === "vendor") {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
       if (String(lead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to convert this lead");

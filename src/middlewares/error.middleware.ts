@@ -8,6 +8,8 @@ export function notFoundMiddleware(req: Request, _res: Response, next: NextFunct
 }
 
 export function errorMiddleware(error: unknown, _req: Request, res: Response, _next: NextFunction) {
+  void _next;
+
   if (error instanceof multer.MulterError) {
     const isFileSizeError = error.code === "LIMIT_FILE_SIZE";
 

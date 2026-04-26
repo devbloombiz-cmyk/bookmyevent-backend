@@ -1,12 +1,13 @@
 import { bookingService } from "../services/booking.service";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
+import { ApiError } from "../utils/api-error";
 
 export const bookingController = {
   createBooking: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {
-      return sendSuccess(res, "Unauthorized", { booking: null }, 401);
+      throw new ApiError(401, "Unauthorized");
     }
 
     const booking = await bookingService.createBooking(req.body, authUser);
@@ -15,7 +16,7 @@ export const bookingController = {
   listBookings: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {
-      return sendSuccess(res, "Unauthorized", { bookings: [] }, 401);
+      throw new ApiError(401, "Unauthorized");
     }
 
     const bookings = await bookingService.listBookings(authUser, req.query as Record<string, unknown>);
@@ -24,7 +25,7 @@ export const bookingController = {
   updateBooking: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {
-      return sendSuccess(res, "Unauthorized", { booking: null }, 401);
+      throw new ApiError(401, "Unauthorized");
     }
 
     const bookingId = String(req.params.bookingId);

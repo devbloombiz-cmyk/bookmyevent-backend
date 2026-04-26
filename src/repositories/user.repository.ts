@@ -3,16 +3,28 @@ import { UserRole } from "../types/domain";
 
 type CreateUserPayload = {
   name: string;
-  email: string;
-  mobile: string;
-  passwordHash: string;
+  email?: string;
+  mobile?: string;
+  passwordHash?: string;
   role: UserRole;
 };
 
 export const userRepository = {
   create: (payload: CreateUserPayload) => UserModel.create(payload),
-  findByEmail: (email: string) => UserModel.findOne({ email: email.toLowerCase() }),
-  findByMobile: (mobile: string) => UserModel.findOne({ mobile: mobile.trim() }),
+  findByEmail: (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) {
+      return Promise.resolve(null);
+    }
+    return UserModel.findOne({ email: normalized });
+  },
+  findByMobile: (mobile: string) => {
+    const normalized = mobile.trim();
+    if (!normalized) {
+      return Promise.resolve(null);
+    }
+    return UserModel.findOne({ mobile: normalized });
+  },
   findByEmailOrMobile: (identifier: string) => {
     const normalizedIdentifier = identifier.trim();
     const isEmailIdentifier = normalizedIdentifier.includes("@");

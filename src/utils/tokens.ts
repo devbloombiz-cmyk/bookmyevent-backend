@@ -1,11 +1,8 @@
 import jwt, { SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
-import { UserRole } from "../types/domain";
 
 export type AccessTokenPayload = {
   sub: string;
-  role: UserRole;
-  email: string;
   tokenType: "access";
 };
 

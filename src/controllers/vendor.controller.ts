@@ -25,7 +25,7 @@ export const vendorController = {
       return sendSuccess(res, "Vendor profile not found", { vendor: null });
     }
 
-    const vendor = await vendorService.getMyVendorProfile({ id: authUser.id, email: authUser.email });
+    const vendor = await vendorService.getMyVendorProfile({ id: authUser.id });
     return sendSuccess(res, "Vendor profile fetched", { vendor });
   }),
   updateMyVendorProfile: asyncHandler(async (req, res) => {
@@ -35,7 +35,7 @@ export const vendorController = {
     }
 
     const vendor = await vendorService.updateMyVendorProfile(
-      { id: authUser.id, email: authUser.email },
+      { id: authUser.id },
       req.body,
     );
     return sendSuccess(res, "Vendor profile updated", { vendor });

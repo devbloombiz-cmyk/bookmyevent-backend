@@ -6,6 +6,7 @@ import { ApiError } from "../utils/api-error";
 import { galleryService } from "./gallery.service";
 import { locationService } from "./location.service";
 import type { UserRole } from "../types/domain";
+import type { AuthenticatedUser } from "../types/auth-user";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const normalizeUrl = (value: unknown) => {
@@ -200,7 +201,7 @@ export const vendorService = {
 
     return vendor;
   },
-  getMyVendorProfile: async (authUser: { id: string; email: string }) => {
+  getMyVendorProfile: async (authUser: Pick<AuthenticatedUser, "id">) => {
     const user = await userRepository.findById(authUser.id);
     if (!user) {
       throw new ApiError(404, "User not found");
@@ -213,7 +214,10 @@ export const vendorService = {
 
     return vendor;
   },
-  updateMyVendorProfile: async (authUser: { id: string; email: string }, payload: Record<string, unknown>) => {
+  updateMyVendorProfile: async (
+    authUser: Pick<AuthenticatedUser, "id">,
+    payload: Record<string, unknown>,
+  ) => {
     const user = await userRepository.findById(authUser.id);
     if (!user) {
       throw new ApiError(404, "User not found");

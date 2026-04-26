@@ -1,15 +1,9 @@
 import { userRepository } from "../repositories/user.repository";
 import { vendorRepository } from "../repositories/vendor.repository";
-import type { UserRole } from "../types/domain";
+import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 
-type AuthUser = {
-  id: string;
-  email: string;
-  role: UserRole;
-};
-
-export async function resolveVendorIdForAuthUser(authUser: AuthUser) {
+export async function resolveVendorIdForAuthUser(authUser: Pick<AuthenticatedUser, "id">) {
   const user = await userRepository.findById(authUser.id);
   if (!user) {
     throw new ApiError(404, "User not found");

@@ -1,11 +1,10 @@
 import { packageRepository } from "../repositories/package.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
+import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
 
-type AuthUser = {
-  id: string;
-  email: string;
+type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
 };
 

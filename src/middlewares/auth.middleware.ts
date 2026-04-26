@@ -62,9 +62,9 @@ export const requireAuth = async (req: Request, _res: Response, next: NextFuncti
 
     req.authUser = {
       id: user.id,
-      name: user.name,
-      email: user.email,
-      mobile: user.mobile,
+      name: user.name ?? undefined,
+      email: user.email ?? undefined,
+      mobile: user.mobile ?? undefined,
       role: user.role,
       roleKeys: accessProfile.roleKeys,
       permissions: accessProfile.permissions,

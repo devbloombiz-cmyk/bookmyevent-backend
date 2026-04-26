@@ -4,10 +4,27 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 
 export const vendorRepository = {
   create: (payload: Record<string, unknown>) => VendorModel.create(payload),
-  findByEmailOrMobile: (email: string, mobile: string) =>
-    VendorModel.findOne({
-      $or: [{ email: email.toLowerCase() }, { mobile: mobile.trim() }],
-    }),
+  findByEmailOrMobile: (email?: string | null, mobile?: string | null) => {
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const normalizedMobile = typeof mobile === "string" ? mobile.trim() : "";
+    const conditions: Array<Record<string, string>> = [];
+
+    if (normalizedEmail) {
+      conditions.push({ email: normalizedEmail });
+    }
+
+    if (normalizedMobile) {
+      conditions.push({ mobile: normalizedMobile });
+    }
+
+    if (!conditions.length) {
+      return Promise.resolve(null);
+    }
+
+    return VendorModel.findOne({
+      $or: conditions,
+    });
+  },
   findAll: (filters: Record<string, unknown> = {}) => {
     const query: Record<string, unknown> = {};
     const includeInactive = filters.includeInactive === true;

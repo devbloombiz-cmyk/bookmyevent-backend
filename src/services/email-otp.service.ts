@@ -7,6 +7,69 @@ import { ApiError } from "../utils/api-error";
 let isBrevoConfigured = false;
 let smtpTransporter: nodemailer.Transporter | null = null;
 
+function extractErrorDetails(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return { message: "Unknown error", rawType: typeof error };
+  }
+
+  const candidate = error as Error & {
+    code?: string;
+    command?: string;
+    response?: string;
+    responseCode?: number;
+    status?: number;
+    statusCode?: number;
+    body?: unknown;
+    stack?: string;
+    cause?: unknown;
+    text?: string;
+    data?: unknown;
+    output?: unknown;
+    config?: unknown;
+    request?: unknown;
+    responseBody?: unknown;
+  };
+
+  const responseObject =
+    typeof candidate.response === "object" && candidate.response !== null
+      ? (candidate.response as { status?: number; statusCode?: number; data?: unknown; text?: string })
+      : undefined;
+
+  const cause =
+    typeof candidate.cause === "object" && candidate.cause !== null
+      ? (candidate.cause as { message?: string; code?: string; status?: number; statusCode?: number })
+      : undefined;
+
+  return {
+    name: candidate.name ?? "Error",
+    message: candidate.message ?? "Unknown error",
+    code: candidate.code,
+    status: candidate.status ?? candidate.statusCode ?? responseObject?.status ?? responseObject?.statusCode,
+    command: candidate.command,
+    responseCode: candidate.responseCode,
+    response: typeof candidate.response === "string" ? candidate.response : undefined,
+    responseText: candidate.text ?? responseObject?.text,
+    body: candidate.body ?? candidate.data ?? candidate.responseBody ?? responseObject?.data,
+    causeMessage: cause?.message,
+    causeCode: cause?.code,
+    causeStatus: cause?.status ?? cause?.statusCode,
+    stack: candidate.stack,
+  };
+}
+
+function redactEmail(email: string) {
+  const [localPart, domain] = email.split("@");
+  if (!localPart || !domain) {
+    return "redacted";
+  }
+
+  if (localPart.length <= 2) {
+    return `**@${domain}`;
+  }
+
+  return `${localPart.slice(0, 2)}***@${domain}`;
+}
+
 function hasSmtpConfig() {
   return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS && env.FROM_EMAIL);
 }
@@ -68,9 +131,29 @@ export const emailOtpService = {
           subject: "Your BookMyEvent OTP",
           html: otpHtml,
         });
+
+        logger.info(
+          {
+            provider: "smtp",
+            email: redactEmail(payload.toEmail),
+            fromEmailConfigured: Boolean(env.FROM_EMAIL),
+          },
+          "OTP email delivered",
+        );
         return;
       } catch (error) {
-        logger.error({ error, email: payload.toEmail }, "Failed to send OTP email via SMTP relay");
+        logger.error(
+          {
+            provider: "smtp",
+            email: redactEmail(payload.toEmail),
+            smtpHostConfigured: Boolean(env.SMTP_HOST),
+            smtpUserConfigured: Boolean(env.SMTP_USER),
+            smtpPassConfigured: Boolean(env.SMTP_PASS),
+            fromEmailConfigured: Boolean(env.FROM_EMAIL),
+            errorDetails: extractErrorDetails(error),
+          },
+          "Failed to send OTP email via SMTP relay",
+        );
       }
     }
 
@@ -88,9 +171,27 @@ export const emailOtpService = {
 
       try {
         await emailApi.sendTransacEmail(sendSmtpEmail);
+
+        logger.info(
+          {
+            provider: "brevo-api",
+            email: redactEmail(payload.toEmail),
+            senderEmailConfigured: Boolean(env.SENDER_EMAIL),
+          },
+          "OTP email delivered",
+        );
         return;
       } catch (error) {
-        logger.error({ error, email: payload.toEmail }, "Failed to send OTP email via Brevo API");
+        logger.error(
+          {
+            provider: "brevo-api",
+            email: redactEmail(payload.toEmail),
+            senderEmailConfigured: Boolean(env.SENDER_EMAIL),
+            brevoApiConfigured: Boolean(env.BREVO_API_KEY),
+            errorDetails: extractErrorDetails(error),
+          },
+          "Failed to send OTP email via Brevo API",
+        );
       }
     }
 

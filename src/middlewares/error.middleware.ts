@@ -3,6 +3,36 @@ import multer from "multer";
 import { ApiError } from "../utils/api-error";
 import { logger } from "../config/logger";
 
+function serializeUnknownError(error: unknown) {
+  if (!(error instanceof Error)) {
+    if (typeof error === "object" && error !== null) {
+      return { ...error };
+    }
+
+    return { message: String(error) };
+  }
+
+  const candidate = error as Error & {
+    code?: string;
+    status?: number;
+    statusCode?: number;
+    response?: unknown;
+    body?: unknown;
+    cause?: unknown;
+  };
+
+  return {
+    name: candidate.name,
+    message: candidate.message,
+    code: candidate.code,
+    status: candidate.status ?? candidate.statusCode,
+    body: candidate.body,
+    response: candidate.response,
+    cause: candidate.cause,
+    stack: candidate.stack,
+  };
+}
+
 export function notFoundMiddleware(req: Request, _res: Response, next: NextFunction) {
   next(new ApiError(404, `Route not found: ${req.originalUrl}`));
 }
@@ -38,7 +68,16 @@ export function errorMiddleware(error: unknown, _req: Request, res: Response, _n
   const safeMessage =
     statusCode >= 500 && !shouldExposeServerError ? "Something went wrong" : fullMessage;
 
-  logger.error({ error }, "Request failed");
+  logger.error(
+    {
+      error: serializeUnknownError(error),
+      statusCode,
+      path: _req.originalUrl,
+      method: _req.method,
+      requestId: _req.id,
+    },
+    "Request failed",
+  );
   res.status(statusCode).json({
     success: false,
     message: safeMessage,

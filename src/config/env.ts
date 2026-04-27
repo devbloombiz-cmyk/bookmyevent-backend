@@ -65,7 +65,7 @@ if (!parsedEnv.MONGODB_URI) {
 const mongodbUri = parsedEnv.MONGODB_URI;
 
 const defaultAccessExpiry = parsedEnv.NODE_ENV === "development" ? "24h" : "15m";
-const defaultRefreshExpiry = parsedEnv.NODE_ENV === "development" ? "90d" : "7d";
+const defaultRefreshExpiry = parsedEnv.NODE_ENV === "development" ? "90d" : "90d";
 
 export const env = {
   ...parsedEnv,

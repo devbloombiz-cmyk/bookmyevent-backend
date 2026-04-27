@@ -5,6 +5,11 @@ import { authService } from "../services/auth.service";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { parseCookieHeader, serializeCookie } from "../utils/cookie";
+import { durationToSeconds } from "../utils/duration";
+import { verifyRefreshToken } from "../utils/tokens";
+
+const accessCookieMaxAgeSeconds = durationToSeconds(env.JWT_ACCESS_EXPIRES_IN, 60 * 15);
+const refreshCookieMaxAgeSeconds = durationToSeconds(env.JWT_REFRESH_EXPIRES_IN, 60 * 60 * 24 * 90);
 
 function getCookieBaseOptions() {
   return {
@@ -24,7 +29,7 @@ function setAuthCookies(res: Response, tokens: { accessToken: string; refreshTok
     serializeCookie(env.AUTH_ACCESS_COOKIE_NAME, tokens.accessToken, {
       ...base,
       httpOnly: true,
-      maxAge: 60 * 15,
+      maxAge: accessCookieMaxAgeSeconds,
     }),
   );
 
@@ -33,7 +38,7 @@ function setAuthCookies(res: Response, tokens: { accessToken: string; refreshTok
     serializeCookie(env.AUTH_REFRESH_COOKIE_NAME, tokens.refreshToken, {
       ...base,
       httpOnly: true,
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: refreshCookieMaxAgeSeconds,
     }),
   );
 
@@ -42,7 +47,7 @@ function setAuthCookies(res: Response, tokens: { accessToken: string; refreshTok
     serializeCookie(env.AUTH_CSRF_COOKIE_NAME, csrfToken, {
       ...base,
       httpOnly: false,
-      maxAge: 60 * 60 * 24 * 7,
+      maxAge: refreshCookieMaxAgeSeconds,
     }),
   );
 
@@ -152,7 +157,22 @@ export const authController = {
   }),
 
   logout: asyncHandler(async (req, res) => {
-    await authService.logout(req.authUser!.id);
+    const authUserId = req.authUser?.id;
+    if (authUserId) {
+      await authService.logout(authUserId);
+    } else {
+      const cookies = parseCookieHeader(req.headers.cookie);
+      const refreshToken = cookies[env.AUTH_REFRESH_COOKIE_NAME];
+      if (refreshToken) {
+        try {
+          const decoded = verifyRefreshToken(refreshToken);
+          await authService.logout(decoded.sub);
+        } catch {
+          // Invalid refresh token is treated as already logged out.
+        }
+      }
+    }
+
     clearAuthCookies(res);
     return sendSuccess(res, "Logout successful", {});
   }),

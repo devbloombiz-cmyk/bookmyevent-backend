@@ -10,15 +10,14 @@ import { refreshTokenRepository } from "../repositories/refresh-token.repository
 import { userRepository } from "../repositories/user.repository";
 import { emailOtpService } from "./email-otp.service";
 import { hasPermission, resolveAccessProfileForUser } from "./pbac.service";
+import { durationToFutureDate } from "../utils/duration";
 
 function hashTokenValue(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function getRefreshExpiryDate(days = 7) {
-  const result = new Date();
-  result.setDate(result.getDate() + days);
-  return result;
+function getRefreshExpiryDate() {
+  return durationToFutureDate(env.JWT_REFRESH_EXPIRES_IN, 60 * 60 * 24 * 90);
 }
 
 function getOtpExpiryDate(minutes = env.OTP_EXPIRY_MINUTES) {

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { PermissionKeys } from "../config/permissions";
 import { vendorController } from "../controllers/vendor.controller";
-import { requireAuth } from "../middlewares/auth.middleware";
+import { attachAuthIfPresent, requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
@@ -28,6 +28,7 @@ vendorRouter.get(
 );
 vendorRouter.post(
   "/",
+  attachAuthIfPresent,
   validateRequest(vendorCreateSchema),
   vendorController.createVendor,
 );

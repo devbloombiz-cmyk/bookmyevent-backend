@@ -80,3 +80,37 @@ export const requireAuth = async (req: Request, _res: Response, next: NextFuncti
     return next(new ApiError(401, "Invalid or expired token"));
   }
 };
+
+export const attachAuthIfPresent = async (req: Request, _res: Response, next: NextFunction) => {
+  const token = extractAccessToken(req);
+  if (!token) {
+    return next();
+  }
+
+  try {
+    assertCsrf(req);
+
+    const decoded = verifyAccessToken(token);
+    const user = await userRepository.findById(decoded.sub);
+
+    if (!user || !user.isActive) {
+      return next();
+    }
+
+    const accessProfile = await resolveAccessProfileForUser(user.id);
+    req.authUser = {
+      id: user.id,
+      name: user.name ?? undefined,
+      email: user.email ?? undefined,
+      mobile: user.mobile ?? undefined,
+      role: user.role,
+      roleKeys: accessProfile.roleKeys,
+      permissions: accessProfile.permissions,
+      defaultLandingPath: accessProfile.defaultLandingPath,
+    };
+
+    return next();
+  } catch {
+    return next();
+  }
+};

@@ -21,22 +21,35 @@ async function seedAdmin() {
   const existingByEmail = await userRepository.findByEmail(adminEmail);
   const existingByMobile = await userRepository.findByMobile(adminMobile);
 
-  if (existingByEmail && existingByEmail.role !== "super_admin") {
-    throw new Error(`Cannot seed admin. Email ${adminEmail} already belongs to ${existingByEmail.role}.`);
+  if (existingByEmail && existingByMobile && String(existingByEmail._id) !== String(existingByMobile._id)) {
+    throw new Error(
+      `Cannot seed admin safely. Email ${adminEmail} and mobile ${adminMobile} belong to different users.`,
+    );
   }
 
-  if (existingByMobile && existingByMobile.role !== "super_admin") {
-    throw new Error(`Cannot seed admin. Mobile ${adminMobile} already belongs to ${existingByMobile.role}.`);
-  }
+  const targetUser = existingByEmail ?? existingByMobile;
 
-  const adminUser = await userRepository.upsertByEmail(adminEmail, {
-    name: adminName,
-    email: adminEmail.toLowerCase(),
-    mobile: adminMobile,
-    passwordHash,
-    role: "super_admin" as const,
-    isActive: true,
-  });
+  const adminUser = targetUser
+    ? await userRepository.updateById(String(targetUser._id), {
+        name: adminName,
+        email: adminEmail.toLowerCase(),
+        mobile: adminMobile,
+        passwordHash,
+        role: "super_admin" as const,
+        isActive: true,
+      })
+    : await userRepository.upsertByEmail(adminEmail, {
+        name: adminName,
+        email: adminEmail.toLowerCase(),
+        mobile: adminMobile,
+        passwordHash,
+        role: "super_admin" as const,
+        isActive: true,
+      });
+
+  if (!adminUser) {
+    throw new Error("Failed to create or update super admin user");
+  }
 
   const superAdminRole = await pbacRepository.findRoleByKey("super_admin");
   if (!superAdminRole) {
@@ -45,7 +58,9 @@ async function seedAdmin() {
 
   await pbacRepository.bindUserRole(String(adminUser._id), String(superAdminRole._id));
 
-  console.warn(`Super admin ready. Login with email (${adminEmail}) or mobile (${adminMobile}).`);
+  console.warn(
+    `Super admin ready (userId=${String(adminUser._id)}). Login with email (${adminEmail}) or mobile (${adminMobile}).`,
+  );
   process.exit(0);
 }
 

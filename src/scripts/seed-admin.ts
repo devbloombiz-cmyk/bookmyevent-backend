@@ -1,6 +1,8 @@
 import dotenv from "dotenv";
 import { connectToDatabase } from "../config/database";
+import { pbacRepository } from "../repositories/pbac.repository";
 import { userRepository } from "../repositories/user.repository";
+import { bootstrapDefaultPbacCatalog } from "../services/pbac.service";
 import { hashPassword } from "../utils/password";
 
 dotenv.config();
@@ -12,6 +14,7 @@ async function seedAdmin() {
   const adminMobile = process.env.SEED_ADMIN_MOBILE ?? "9999999999";
 
   await connectToDatabase();
+  await bootstrapDefaultPbacCatalog();
 
   const passwordHash = await hashPassword(adminPassword);
 
@@ -26,7 +29,7 @@ async function seedAdmin() {
     throw new Error(`Cannot seed admin. Mobile ${adminMobile} already belongs to ${existingByMobile.role}.`);
   }
 
-  await userRepository.upsertByEmail(adminEmail, {
+  const adminUser = await userRepository.upsertByEmail(adminEmail, {
     name: adminName,
     email: adminEmail.toLowerCase(),
     mobile: adminMobile,
@@ -34,6 +37,13 @@ async function seedAdmin() {
     role: "super_admin" as const,
     isActive: true,
   });
+
+  const superAdminRole = await pbacRepository.findRoleByKey("super_admin");
+  if (!superAdminRole) {
+    throw new Error("super_admin role not found after PBAC bootstrap");
+  }
+
+  await pbacRepository.bindUserRole(String(adminUser._id), String(superAdminRole._id));
 
   console.warn(`Super admin ready. Login with email (${adminEmail}) or mobile (${adminMobile}).`);
   process.exit(0);

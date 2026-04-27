@@ -116,8 +116,13 @@ export async function resolveAccessProfileForUser(userId: string): Promise<Resol
     })
     .filter(Boolean);
 
-  const fallbackRoleKeys = dynamicRoleKeys.length ? [] : await resolveLegacyRoleFallback(userId);
-  const roleKeys = Array.from(new Set([...dynamicRoleKeys, ...fallbackRoleKeys]));
+  const legacyRoleKeys = await resolveLegacyRoleFallback(userId);
+  const guaranteedRoleKeys = legacyRoleKeys.includes(SystemRoleKeys.SuperAdmin)
+    ? [SystemRoleKeys.SuperAdmin]
+    : dynamicRoleKeys.length
+      ? []
+      : legacyRoleKeys;
+  const roleKeys = Array.from(new Set([...dynamicRoleKeys, ...guaranteedRoleKeys]));
 
   const dynamicRoleIds = userRoleRows
     .map((row) => {

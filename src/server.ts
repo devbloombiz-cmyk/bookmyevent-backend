@@ -3,6 +3,7 @@ import { connectToDatabase } from "./config/database";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
 import { app } from "./app";
+import { bootstrapDefaultPbacCatalog } from "./services/pbac.service";
 
 dotenv.config();
 
@@ -18,6 +19,13 @@ process.on("uncaughtException", (error) => {
 
 async function bootstrap() {
   await connectToDatabase();
+
+  try {
+    await bootstrapDefaultPbacCatalog();
+    logger.info("PBAC catalog bootstrap completed");
+  } catch (error) {
+    logger.error({ error }, "PBAC catalog bootstrap failed");
+  }
 
   app.listen(env.PORT, () => {
     logger.info(`BookMyEvent API running on port ${env.PORT}`);

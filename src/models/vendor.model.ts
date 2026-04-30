@@ -2,6 +2,7 @@ import { Schema, model } from "mongoose";
 
 const vendorSchema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     businessName: { type: String, required: true, trim: true },
     ownerName: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
@@ -48,6 +49,7 @@ const vendorSchema = new Schema(
 );
 
 vendorSchema.index({ category: 1 });
+vendorSchema.index({ userId: 1 }, { unique: true, sparse: true });
 vendorSchema.index({ state: 1, district: 1, city: 1 });
 vendorSchema.index({ city: 1 });
 vendorSchema.index({ subCategory: 1 });

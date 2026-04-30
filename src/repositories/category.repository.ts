@@ -6,7 +6,7 @@ export const categoryRepository = {
     CategoryModel.find(includeInactive ? {} : { isActive: true }).sort({ name: 1 }),
   findById: (categoryId: string) => CategoryModel.findById(categoryId),
   updateById: (categoryId: string, payload: Record<string, unknown>) =>
-    CategoryModel.findByIdAndUpdate(categoryId, payload, { new: true }),
+    CategoryModel.findByIdAndUpdate(categoryId, payload, { returnDocument: "after" }),
   deleteById: (categoryId: string) => CategoryModel.findByIdAndDelete(categoryId),
   addSubCategories: (categoryId: string, subCategories: Array<Record<string, unknown>>) =>
     CategoryModel.findByIdAndUpdate(
@@ -18,7 +18,7 @@ export const categoryRepository = {
           },
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     ),
   updateSubCategory: (
     categoryId: string,
@@ -32,7 +32,7 @@ export const categoryRepository = {
           Object.entries(payload).map(([key, value]) => [`subCategories.$.${key}`, value]),
         ),
       },
-      { new: true },
+      { returnDocument: "after" },
     ),
   deleteSubCategory: (categoryId: string, subCategoryId: string) =>
     CategoryModel.findByIdAndUpdate(
@@ -42,6 +42,6 @@ export const categoryRepository = {
           subCategories: { _id: subCategoryId },
         },
       },
-      { new: true },
+      { returnDocument: "after" },
     ),
 };

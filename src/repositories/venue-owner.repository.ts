@@ -1,10 +1,10 @@
-import { VendorModel } from "../models/vendor.model";
+import { VenueOwnerModel } from "../models/venue-owner.model";
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export const vendorRepository = {
-  create: (payload: Record<string, unknown>) => VendorModel.create(payload),
-  findByUserId: (userId: string) => VendorModel.findOne({ userId }),
+export const venueOwnerRepository = {
+  create: (payload: Record<string, unknown>) => VenueOwnerModel.create(payload),
+  findById: (id: string) => VenueOwnerModel.findById(id),
   findByEmailOrMobile: (email?: string | null, mobile?: string | null) => {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
     const normalizedMobile = typeof mobile === "string" ? mobile.trim() : "";
@@ -22,29 +22,23 @@ export const vendorRepository = {
       return Promise.resolve(null);
     }
 
-    return VendorModel.findOne({
-      $or: conditions,
-    });
+    return VenueOwnerModel.findOne({ $or: conditions });
   },
   findAll: (filters: Record<string, unknown> = {}) => {
     const query: Record<string, unknown> = {};
     const includeInactive = filters.includeInactive === true;
 
     if (!includeInactive) {
-      query.isActive = true;
       query.approvalStatus = "active";
+      query.isActive = true;
     }
 
-    if (typeof filters.category === "string" && filters.category.trim()) {
-      query.category = new RegExp(`^${escapeRegExp(filters.category.trim())}$`, "i");
+    if (typeof filters.approvalStatus === "string" && filters.approvalStatus.trim()) {
+      query.approvalStatus = filters.approvalStatus.trim();
     }
 
-    if (typeof filters.subCategory === "string" && filters.subCategory.trim()) {
-      query.subCategory = new RegExp(`^${escapeRegExp(filters.subCategory.trim())}$`, "i");
-    }
-
-    if (typeof filters.state === "string" && filters.state.trim()) {
-      query.state = new RegExp(`^${escapeRegExp(filters.state.trim())}$`, "i");
+    if (typeof filters.venueType === "string" && filters.venueType.trim()) {
+      query.venueType = new RegExp(`^${escapeRegExp(filters.venueType.trim())}$`, "i");
     }
 
     if (typeof filters.district === "string" && filters.district.trim()) {
@@ -55,32 +49,21 @@ export const vendorRepository = {
       query.city = new RegExp(`^${escapeRegExp(filters.city.trim())}$`, "i");
     }
 
-    if (typeof filters.isVerified === "boolean") {
-      query.isVerified = filters.isVerified;
-    }
-
-    if (typeof filters.approvalStatus === "string" && filters.approvalStatus.trim()) {
-      query.approvalStatus = filters.approvalStatus.trim();
-    }
-
     if (typeof filters.search === "string" && filters.search.trim()) {
       const searchRegex = new RegExp(escapeRegExp(filters.search.trim()), "i");
       query.$or = [
         { businessName: searchRegex },
         { ownerName: searchRegex },
-        { category: searchRegex },
-        { subCategory: searchRegex },
+        { venueType: searchRegex },
         { city: searchRegex },
-        { serviceZones: { $in: [searchRegex] } },
       ];
     }
 
-    const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(100, filters.limit)) : 50;
+    const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(200, filters.limit)) : 60;
 
-    return VendorModel.find(query).sort({ createdAt: -1 }).limit(limit);
+    return VenueOwnerModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
-  findById: (id: string) => VendorModel.findById(id),
   updateById: (id: string, payload: Record<string, unknown>) =>
-    VendorModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),
-  deleteById: (id: string) => VendorModel.findByIdAndDelete(id),
+    VenueOwnerModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),
+  deleteById: (id: string) => VenueOwnerModel.findByIdAndDelete(id),
 };

@@ -106,7 +106,7 @@ const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
   const email = normalizeText(payload.email).toLowerCase();
   const mobile = normalizeText(payload.mobile);
   if (!email || !mobile) {
-    return;
+    return null;
   }
   const name = normalizeText(payload.ownerName) || normalizeText(payload.businessName) || "Vendor";
 
@@ -117,18 +117,19 @@ const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
 
   const existingUser = userByMobile ?? userByEmail;
   if (existingUser) {
-    await userRepository.updateById(existingUser.id, {
+    const updatedUser = await userRepository.updateById(existingUser.id, {
       name,
       email,
       mobile,
       role: "vendor",
       isActive: true,
     });
-    return;
+
+    return updatedUser ?? existingUser;
   }
 
   const passwordHash = await hashPassword(crypto.randomBytes(18).toString("hex"));
-  await userRepository.create({
+  return userRepository.create({
     name,
     email,
     mobile,
@@ -147,6 +148,50 @@ const syncLocationIfPresent = async (payload: Record<string, unknown>) => {
   }
 
   await locationService.createLocation({ state, district, city });
+};
+
+const syncVendorUserStatus = async (
+  vendorRecord: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) => {
+  const email = normalizeText(vendorRecord.email || payload.email).toLowerCase();
+  const mobile = normalizeText(vendorRecord.mobile || payload.mobile);
+  const linkedUserId =
+    typeof vendorRecord.userId === "string"
+      ? vendorRecord.userId
+      : vendorRecord.userId
+        ? String(vendorRecord.userId)
+        : "";
+
+  if (!linkedUserId && !email && !mobile) {
+    return;
+  }
+
+  const user = linkedUserId
+    ? await userRepository.findById(linkedUserId)
+    : email
+      ? await userRepository.findByEmail(email)
+      : mobile
+        ? await userRepository.findByMobile(mobile)
+        : null;
+
+  if (!user) {
+    return;
+  }
+
+  const approvalStatus = normalizeText(payload.approvalStatus || vendorRecord.approvalStatus);
+  const isVendorActive =
+    typeof payload.isActive === "boolean"
+      ? payload.isActive
+      : typeof vendorRecord.isActive === "boolean"
+        ? vendorRecord.isActive
+        : true;
+
+  const shouldBeActive = isVendorActive && approvalStatus !== "disabled";
+
+  await userRepository.updateById(user.id, {
+    isActive: shouldBeActive,
+  });
 };
 
 export const vendorService = {
@@ -169,7 +214,14 @@ export const vendorService = {
       }
     }
 
-    await Promise.all([ensureVendorUserAccount(normalizedPayload), syncLocationIfPresent(normalizedPayload)]);
+    const [linkedUser] = await Promise.all([
+      ensureVendorUserAccount(normalizedPayload),
+      syncLocationIfPresent(normalizedPayload),
+    ]);
+
+    if (linkedUser?._id) {
+      normalizedPayload.userId = linkedUser._id;
+    }
 
     const vendor = await vendorRepository.create(normalizedPayload);
 
@@ -202,6 +254,11 @@ export const vendorService = {
     return vendor;
   },
   getMyVendorProfile: async (authUser: Pick<AuthenticatedUser, "id">) => {
+    const vendorByUserId = await vendorRepository.findByUserId(authUser.id);
+    if (vendorByUserId) {
+      return vendorByUserId;
+    }
+
     const user = await userRepository.findById(authUser.id);
     if (!user) {
       throw new ApiError(404, "User not found");
@@ -210,6 +267,12 @@ export const vendorService = {
     const vendor = await vendorRepository.findByEmailOrMobile(user.email, user.mobile);
     if (!vendor) {
       throw new ApiError(404, "Vendor profile not found");
+    }
+
+    if (!vendor.userId) {
+      await vendorRepository.updateById(String(vendor._id), {
+        userId: authUser.id,
+      });
     }
 
     return vendor;
@@ -218,6 +281,19 @@ export const vendorService = {
     authUser: Pick<AuthenticatedUser, "id">,
     payload: Record<string, unknown>,
   ) => {
+    const vendorByUserId = await vendorRepository.findByUserId(authUser.id);
+    if (vendorByUserId) {
+      const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
+      await syncLocationIfPresent(normalizedPayload);
+
+      const updatedVendor = await vendorRepository.updateById(String(vendorByUserId._id), normalizedPayload);
+      if (!updatedVendor) {
+        throw new ApiError(404, "Vendor not found");
+      }
+
+      return updatedVendor;
+    }
+
     const user = await userRepository.findById(authUser.id);
     if (!user) {
       throw new ApiError(404, "User not found");
@@ -226,6 +302,12 @@ export const vendorService = {
     const vendor = await vendorRepository.findByEmailOrMobile(user.email, user.mobile);
     if (!vendor) {
       throw new ApiError(404, "Vendor profile not found");
+    }
+
+    if (!vendor.userId) {
+      await vendorRepository.updateById(String(vendor._id), {
+        userId: authUser.id,
+      });
     }
 
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
@@ -241,12 +323,27 @@ export const vendorService = {
   updateVendor: async (vendorId: string, payload: Record<string, unknown>) => {
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
 
-    await Promise.all([ensureVendorUserAccount(normalizedPayload), syncLocationIfPresent(normalizedPayload)]);
+    const existingVendor = await vendorRepository.findById(vendorId);
+    if (!existingVendor) {
+      throw new ApiError(404, "Vendor not found");
+    }
+
+    const [linkedUser] = await Promise.all([
+      ensureVendorUserAccount(normalizedPayload),
+      syncLocationIfPresent(normalizedPayload),
+    ]);
+
+    if (linkedUser?._id) {
+      normalizedPayload.userId = linkedUser._id;
+    }
 
     const vendor = await vendorRepository.updateById(vendorId, normalizedPayload);
     if (!vendor) {
       throw new ApiError(404, "Vendor not found");
     }
+
+    await syncVendorUserStatus(existingVendor.toObject(), normalizedPayload);
+
     return vendor;
   },
   deleteVendor: async (vendorId: string) => {

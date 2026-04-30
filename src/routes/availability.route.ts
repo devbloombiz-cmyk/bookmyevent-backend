@@ -4,7 +4,11 @@ import { availabilityController } from "../controllers/availability.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
-import { listAvailabilitySchema, setAvailabilitySchema } from "../validators/availability.validator";
+import {
+  listAvailabilityByDateSchema,
+  listAvailabilitySchema,
+  setAvailabilitySchema,
+} from "../validators/availability.validator";
 
 const availabilityRouter = Router();
 
@@ -18,6 +22,11 @@ availabilityRouter.get(
   "/public",
   validateRequest(listAvailabilitySchema),
   availabilityController.listByVendorPublic,
+);
+availabilityRouter.get(
+  "/public/by-date",
+  validateRequest(listAvailabilityByDateSchema),
+  availabilityController.listAvailableVendorsByDate,
 );
 availabilityRouter.post(
   "/",

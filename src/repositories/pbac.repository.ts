@@ -8,35 +8,35 @@ export const pbacRepository = {
     PermissionModel.findOneAndUpdate(
       { key },
       { $set: { key, description, isSystem: true, isActive: true } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ),
 
   upsertRole: (key: string, name: string, description: string) =>
     RoleModel.findOneAndUpdate(
       { key },
       { $set: { key, name, description, isSystem: true, isActive: true } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ),
 
   upsertCustomRole: (key: string, name: string, description: string) =>
     RoleModel.findOneAndUpdate(
       { key },
       { $set: { key, name, description, isSystem: false, isActive: true } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ),
 
   bindRolePermission: (roleId: string, permissionId: string) =>
     RolePermissionModel.findOneAndUpdate(
       { roleId, permissionId },
       { $set: { roleId, permissionId } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ),
 
   bindUserRole: (userId: string, roleId: string) =>
     UserRoleModel.findOneAndUpdate(
       { userId, roleId },
       { $set: { userId, roleId } },
-      { upsert: true, new: true },
+      { upsert: true, returnDocument: "after" },
     ),
 
   listRolesByUserId: (userId: string) =>

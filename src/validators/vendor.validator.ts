@@ -119,6 +119,7 @@ export const vendorListSchema = z.object({
   query: z.object({
     category: z.string().min(2).optional(),
     subCategory: z.string().min(2).optional(),
+    search: z.string().min(1).optional(),
     state: z.string().min(2).optional(),
     district: z.string().min(2).optional(),
     city: z.string().min(2).optional(),

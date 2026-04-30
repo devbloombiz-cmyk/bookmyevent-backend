@@ -19,3 +19,11 @@ export const listAvailabilitySchema = z.object({
   }),
   params: z.object({}).default({}),
 });
+
+export const listAvailabilityByDateSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({
+    date: z.coerce.date(),
+  }),
+  params: z.object({}).default({}),
+});

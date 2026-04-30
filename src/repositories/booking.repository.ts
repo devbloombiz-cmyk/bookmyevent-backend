@@ -8,5 +8,5 @@ export const bookingRepository = {
   findById: (bookingId: string) => BookingModel.findById(bookingId),
   findByLeadId: (leadId: string) => BookingModel.findOne({ leadId }),
   updateById: (bookingId: string, payload: Record<string, unknown>) =>
-    BookingModel.findByIdAndUpdate(bookingId, payload, { new: true }),
+    BookingModel.findByIdAndUpdate(bookingId, payload, { returnDocument: "after" }),
 };

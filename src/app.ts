@@ -13,7 +13,7 @@ export const app = express();
 
 app.set("trust proxy", env.TRUST_PROXY);
 
-const defaultLocalOrigins = [ "https://bookmyevent.ae", "https://www.bookmyevent.ae"];
+const defaultLocalOrigins = [ "https://bookmyevent.ae", "https://www.bookmyevent.ae","http://localhost:3000", "http://127.0.0.1:3000"];
 const allowedOrigins = env.ALLOWED_ORIGINS.length ? env.ALLOWED_ORIGINS : defaultLocalOrigins;
 
 app.use(

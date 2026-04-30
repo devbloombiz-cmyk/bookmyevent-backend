@@ -59,4 +59,7 @@ export const availabilityService = {
 
     return availabilityRepository.findByVendor(targetVendorId);
   },
+  listAvailableVendorIdsByDate: async (date: Date) => {
+    return availabilityRepository.listAvailableVendorIdsByDate(date);
+  },
 };

@@ -26,6 +26,6 @@ export const galleryRepository = {
     return GalleryModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
   updateById: (galleryId: string, payload: Record<string, unknown>) =>
-    GalleryModel.findByIdAndUpdate(galleryId, payload, { new: true }),
+    GalleryModel.findByIdAndUpdate(galleryId, payload, { returnDocument: "after" }),
   deleteById: (galleryId: string) => GalleryModel.findByIdAndDelete(galleryId),
 };

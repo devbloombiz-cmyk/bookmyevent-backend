@@ -22,4 +22,15 @@ export const availabilityController = {
     const slots = await availabilityService.listByVendor(vendorId);
     return sendSuccess(res, "Availability fetched", { slots });
   }),
+  listAvailableVendorsByDate: asyncHandler(async (req, res) => {
+    const eventDate = req.query.date;
+    const date = typeof eventDate === "string" ? new Date(eventDate) : null;
+
+    if (!date || Number.isNaN(date.getTime())) {
+      return sendSuccess(res, "Invalid date", { vendorIds: [] }, 400);
+    }
+
+    const vendorIds = await availabilityService.listAvailableVendorIdsByDate(date);
+    return sendSuccess(res, "Available vendors fetched", { vendorIds });
+  }),
 };

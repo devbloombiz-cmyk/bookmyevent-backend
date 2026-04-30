@@ -21,10 +21,10 @@ export const packageRepository = {
     PlatformPackageModel.find(includeInactive ? {} : { isActive: true }).sort({ createdAt: -1 }),
   findPlatformPackageById: (packageId: string) => PlatformPackageModel.findById(packageId),
   updateVendorPackage: (packageId: string, payload: Record<string, unknown>) =>
-    VendorPackageModel.findByIdAndUpdate(packageId, payload, { new: true }),
+    VendorPackageModel.findByIdAndUpdate(packageId, payload, { returnDocument: "after" }),
   findVendorPackageById: (packageId: string) => VendorPackageModel.findById(packageId),
   deleteVendorPackage: (packageId: string) => VendorPackageModel.findByIdAndDelete(packageId),
   updatePlatformPackage: (packageId: string, payload: Record<string, unknown>) =>
-    PlatformPackageModel.findByIdAndUpdate(packageId, payload, { new: true }),
+    PlatformPackageModel.findByIdAndUpdate(packageId, payload, { returnDocument: "after" }),
   deletePlatformPackage: (packageId: string) => PlatformPackageModel.findByIdAndDelete(packageId),
 };

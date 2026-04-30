@@ -6,5 +6,5 @@ export const leadRepository = {
   findByVendor: (vendorId: string) => LeadModel.find({ vendorId }).sort({ createdAt: -1 }),
   findById: (leadId: string) => LeadModel.findById(leadId),
   updateById: (leadId: string, payload: Record<string, unknown>) =>
-    LeadModel.findByIdAndUpdate(leadId, payload, { new: true }),
+    LeadModel.findByIdAndUpdate(leadId, payload, { returnDocument: "after" }),
 };

@@ -39,7 +39,11 @@ export const userRepository = {
   updateById: (
     id: string,
     update: Partial<CreateUserPayload> & { isActive?: boolean; role?: UserRole },
-  ) => UserModel.findByIdAndUpdate(id, { $set: update }, { new: true }),
+  ) => UserModel.findByIdAndUpdate(id, { $set: update }, { returnDocument: "after" }),
   upsertByEmail: (email: string, update: Partial<CreateUserPayload> & { isActive?: boolean }) =>
-    UserModel.findOneAndUpdate({ email: email.toLowerCase() }, { $set: update }, { upsert: true, new: true }),
+    UserModel.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      { $set: update },
+      { upsert: true, returnDocument: "after" },
+    ),
 };

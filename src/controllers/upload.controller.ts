@@ -14,7 +14,8 @@ export const uploadController = {
     }
 
     const isVendorScope = Boolean(req.authUser?.permissions.includes(PermissionKeys.ScopeVendorOwn));
-    const defaultFolder = isVendorScope ? "vendors" : "services";
+    const isVenueOwnerScope = Boolean(req.authUser?.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn));
+    const defaultFolder = isVendorScope || isVenueOwnerScope ? "vendors" : "services";
     const folder = parseS3UploadFolder(req.body?.folder, defaultFolder);
     const uploadedFile = await uploadToS3(file, folder);
 

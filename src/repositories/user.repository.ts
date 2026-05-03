@@ -9,8 +9,31 @@ type CreateUserPayload = {
   role: UserRole;
 };
 
+function normalizeCreatePayload(payload: CreateUserPayload) {
+  const normalized: Record<string, unknown> = {
+    name: payload.name,
+    role: payload.role,
+  };
+
+  const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+  if (email) {
+    normalized.email = email;
+  }
+
+  const mobile = typeof payload.mobile === "string" ? payload.mobile.trim() : "";
+  if (mobile) {
+    normalized.mobile = mobile;
+  }
+
+  if (typeof payload.passwordHash === "string" && payload.passwordHash) {
+    normalized.passwordHash = payload.passwordHash;
+  }
+
+  return normalized;
+}
+
 export const userRepository = {
-  create: (payload: CreateUserPayload) => UserModel.create(payload),
+  create: (payload: CreateUserPayload) => UserModel.create(normalizeCreatePayload(payload)),
   findByEmail: (email: string) => {
     const normalized = email.trim().toLowerCase();
     if (!normalized) {
@@ -43,7 +66,13 @@ export const userRepository = {
   upsertByEmail: (email: string, update: Partial<CreateUserPayload> & { isActive?: boolean }) =>
     UserModel.findOneAndUpdate(
       { email: email.toLowerCase() },
-      { $set: update },
+      {
+        $set: {
+          ...update,
+          email: typeof update.email === "string" ? update.email.trim().toLowerCase() : undefined,
+          mobile: typeof update.mobile === "string" && update.mobile.trim() ? update.mobile.trim() : undefined,
+        },
+      },
       { upsert: true, returnDocument: "after" },
     ),
 };

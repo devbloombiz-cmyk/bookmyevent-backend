@@ -5,6 +5,8 @@ const leadSchema = new Schema(
   {
     customerId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     vendorId: { type: Schema.Types.ObjectId, ref: "Vendor", required: true },
+    venueOwnerId: { type: Schema.Types.ObjectId, ref: "VenueOwner", default: null },
+    venuePackageName: { type: String, default: "", trim: true },
     eventDate: { type: Date, required: true },
     eventSlot: { type: String, default: "Full Day", trim: true },
     location: { type: String, required: true, trim: true },

@@ -24,6 +24,8 @@ const vendorSchema = new Schema(
       instagram: { type: String, default: "", trim: true },
       youtube: { type: String, default: "", trim: true },
     },
+    videoLinks: { type: [String], default: [] },
+    websiteUrl: { type: String, default: "", trim: true },
     description: { type: String, default: "" },
     paymentTerms: { type: String, default: "", trim: true },
     travelCost: { type: String, default: "", trim: true },

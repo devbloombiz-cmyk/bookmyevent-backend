@@ -1,6 +1,7 @@
 export const USER_ROLES = [
   "customer",
   "vendor",
+  "venue_owner",
   "super_admin",
   "vendor_admin",
   "accounts_admin",

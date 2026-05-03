@@ -1,6 +1,7 @@
 export const PermissionKeys = {
   WorkspaceAdminAccess: "workspace:admin:access",
   WorkspaceVendorAccess: "workspace:vendor:access",
+  WorkspaceVenueOwnerAccess: "workspace:venue-owner:access",
   WorkspaceCustomerAccess: "workspace:customer:access",
 
   VendorRead: "vendor:read",
@@ -57,6 +58,7 @@ export const PermissionKeys = {
   UserSystemCreate: "user:system:create",
 
   ScopeVendorOwn: "scope:vendor:own",
+  ScopeVenueOwnerOwn: "scope:venue-owner:own",
   ScopeCustomerOwn: "scope:customer:own",
 } as const;
 
@@ -65,6 +67,7 @@ export type PermissionKey = (typeof PermissionKeys)[keyof typeof PermissionKeys]
 export const DefaultLandingByPermissionPriority: Array<{ permission: PermissionKey; path: string }> = [
   { permission: PermissionKeys.WorkspaceAdminAccess, path: "/admin" },
   { permission: PermissionKeys.WorkspaceVendorAccess, path: "/vendor" },
+  { permission: PermissionKeys.WorkspaceVenueOwnerAccess, path: "/venue-owner" },
   { permission: PermissionKeys.WorkspaceCustomerAccess, path: "/" },
 ];
 
@@ -73,6 +76,7 @@ export const SystemRoleKeys = {
   VendorAdmin: "vendor_admin",
   AccountsAdmin: "accounts_admin",
   Vendor: "vendor",
+  VenueOwner: "venue_owner",
   Customer: "customer",
 } as const;
 
@@ -151,6 +155,18 @@ export const DefaultRolePermissionKeys: Record<string, PermissionKey[]> = {
     PermissionKeys.UserProfileRead,
     PermissionKeys.UserProfileUpdate,
     PermissionKeys.ScopeVendorOwn,
+  ],
+  [SystemRoleKeys.VenueOwner]: [
+    PermissionKeys.WorkspaceVenueOwnerAccess,
+    PermissionKeys.AvailabilityReadOwn,
+    PermissionKeys.AvailabilityWriteOwn,
+    PermissionKeys.LeadReadOwnVendor,
+    PermissionKeys.LeadUpdateOwnVendor,
+    PermissionKeys.LeadConvertOwnVendor,
+    PermissionKeys.UploadImage,
+    PermissionKeys.UserProfileRead,
+    PermissionKeys.UserProfileUpdate,
+    PermissionKeys.ScopeVenueOwnerOwn,
   ],
   [SystemRoleKeys.Customer]: [
     PermissionKeys.WorkspaceCustomerAccess,

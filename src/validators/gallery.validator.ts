@@ -7,6 +7,8 @@ const galleryBodySchema = z.object({
   mediaType: z.enum(["image", "video"]).default("image"),
   mediaUrl: z.url(),
   thumbnailUrl: z.url().optional().default(""),
+  videoPlatform: z.enum(["youtube", "instagram", "other"]).optional().default("other"),
+  embedUrl: z.union([z.url(), z.literal("")]).optional().default(""),
   sourceType: z.enum(["admin", "vendor"]).default("admin"),
   vendorId: z.string().optional().default(""),
   location: z.string().optional().default(""),

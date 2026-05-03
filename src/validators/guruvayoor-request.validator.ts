@@ -1,16 +1,35 @@
 import { z } from "zod";
 
+const MIN_BOOKING_NOTICE_DAYS = 10;
+
+function isAtLeastNoticeDaysAhead(value: Date, noticeDays: number) {
+  const selectedDate = new Date(value);
+  selectedDate.setHours(0, 0, 0, 0);
+
+  const threshold = new Date();
+  threshold.setHours(0, 0, 0, 0);
+  threshold.setDate(threshold.getDate() + noticeDays);
+
+  return selectedDate.getTime() >= threshold.getTime();
+}
+
 const personDetailSchema = z.object({
   fullName: z.string().min(2),
   dateOfBirth: z.coerce.date(),
   gender: z.enum(["male", "female", "other"]),
-  idProofType: z.enum(["aadhaar", "passport", "driving_license", "voter_id", "other"]),
+  idProofType: z.enum(["aadhaar", "passport", "driving_license", "voter_id", "pan_card"]),
   idNumber: z.string().min(4),
 });
 
 export const createGuruvayoorRequestSchema = z.object({
   body: z.object({
-    eventDate: z.coerce.date(),
+    eventDate: z
+      .coerce
+      .date()
+      .refine(
+        (value) => isAtLeastNoticeDaysAhead(value, MIN_BOOKING_NOTICE_DAYS),
+        `Booking must be made at least ${MIN_BOOKING_NOTICE_DAYS} days in advance.`,
+      ),
     timeSlot: z.enum(["05:00", "06:00", "07:00", "08:00", "09:00", "10:00"]),
     groomDetails: personDetailSchema,
     brideDetails: personDetailSchema,

@@ -2,15 +2,18 @@ import { availabilityRepository } from "../repositories/availability.repository"
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
-import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
+import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
 };
 
 async function resolveTargetVendorIdForWrite(payloadVendorId: string | undefined, authUser: AuthUser) {
-  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-    return resolveVendorIdForAuthUser(authUser);
+  if (
+    authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+    authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+  ) {
+    return resolveVendorIdForScopedUser(authUser);
   }
 
   if (!payloadVendorId) {
@@ -32,7 +35,11 @@ async function resolveTargetVendorIdForList(
   }
 
   if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-    return resolveVendorIdForAuthUser(authUser);
+    return resolveVendorIdForScopedUser(authUser);
+  }
+
+  if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+    return resolveVendorIdForScopedUser(authUser);
   }
 
   return queryVendorId ?? "";

@@ -2,8 +2,17 @@ import { VenueOwnerModel } from "../models/venue-owner.model";
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const canonicalToLegacy: Record<string, string[]> = {
+  AC_HALL: ["AC hall", "Conference / Meeting Halls", "Auditorium & Convention Centres"],
+  NON_AC_HALL: ["Banquet Halls"],
+  OUTDOOR: ["Outdoor Venues"],
+  RESORT: ["Hotels & Resorts"],
+  HOTEL: ["Hotels & Resorts"],
+};
+
 export const venueOwnerRepository = {
   create: (payload: Record<string, unknown>) => VenueOwnerModel.create(payload),
+  findByUserId: (userId: string) => VenueOwnerModel.findOne({ userId }),
   findById: (id: string) => VenueOwnerModel.findById(id),
   findByEmailOrMobile: (email?: string | null, mobile?: string | null) => {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -38,7 +47,16 @@ export const venueOwnerRepository = {
     }
 
     if (typeof filters.venueType === "string" && filters.venueType.trim()) {
-      query.venueType = new RegExp(`^${escapeRegExp(filters.venueType.trim())}$`, "i");
+      const requestedType = filters.venueType.trim();
+      const canonicalMatch = canonicalToLegacy[requestedType] ?? [];
+      if (canonicalMatch.length) {
+        query.$or = [
+          { venueTypes: requestedType },
+          { venueType: { $in: canonicalMatch } },
+        ];
+      } else {
+        query.venueType = new RegExp(`^${escapeRegExp(requestedType)}$`, "i");
+      }
     }
 
     if (typeof filters.district === "string" && filters.district.trim()) {
@@ -51,12 +69,19 @@ export const venueOwnerRepository = {
 
     if (typeof filters.search === "string" && filters.search.trim()) {
       const searchRegex = new RegExp(escapeRegExp(filters.search.trim()), "i");
-      query.$or = [
+      const searchOr = [
         { businessName: searchRegex },
         { ownerName: searchRegex },
         { venueType: searchRegex },
         { city: searchRegex },
       ];
+
+      if (Array.isArray(query.$or)) {
+        query.$and = [{ $or: query.$or }, { $or: searchOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchOr;
+      }
     }
 
     const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(200, filters.limit)) : 60;

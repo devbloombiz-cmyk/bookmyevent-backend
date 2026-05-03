@@ -10,6 +10,7 @@ import {
   requestOtpSchema,
   refreshTokenSchema,
   verifyOtpSchema,
+  venueOwnerSignupSchema,
   vendorSignupSchema,
 } from "../validators/auth.validator";
 
@@ -17,8 +18,10 @@ const authRouter = Router();
 
 authRouter.post("/signup/customer", validateRequest(customerSignupSchema), authController.signupCustomer);
 authRouter.post("/signup/vendor", validateRequest(vendorSignupSchema), authController.signupVendor);
+authRouter.post("/signup/venue-owner", validateRequest(venueOwnerSignupSchema), authController.signupVenueOwner);
 authRouter.post("/login/customer", validateRequest(loginSchema), authController.loginCustomer);
 authRouter.post("/login/vendor", validateRequest(loginSchema), authController.loginVendor);
+authRouter.post("/login/venue-owner", validateRequest(loginSchema), authController.loginVenueOwner);
 authRouter.post("/login/admin", validateRequest(loginSchema), authController.loginAdmin);
 authRouter.post("/send-otp", otpSendRateLimit, validateRequest(requestOtpSchema), authController.requestOtp);
 authRouter.post("/request-otp", otpSendRateLimit, validateRequest(requestOtpSchema), authController.requestOtp);

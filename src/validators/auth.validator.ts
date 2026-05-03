@@ -17,6 +17,7 @@ export const customerSignupSchema = z.object({
 });
 
 export const vendorSignupSchema = customerSignupSchema;
+export const venueOwnerSignupSchema = customerSignupSchema;
 
 export const loginSchema = z.object({
   body: z

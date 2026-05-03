@@ -8,12 +8,19 @@ import {
   createVenueOwnerSchema,
   listVenueOwnerSchema,
   updateVenueOwnerSchema,
+  updateVenueOwnerSelfSchema,
   venueOwnerIdSchema,
 } from "../validators/venue-owner.validator";
 
 const venueOwnerRouter = Router();
 
 venueOwnerRouter.get("/", validateRequest(listVenueOwnerSchema), venueOwnerController.listVenueOwners);
+venueOwnerRouter.get(
+  "/me",
+  requireAuth,
+  authorize(PermissionKeys.WorkspaceVenueOwnerAccess),
+  venueOwnerController.getMyVenueOwnerProfile,
+);
 venueOwnerRouter.get(
   "/:venueOwnerId",
   validateRequest(venueOwnerIdSchema),
@@ -24,6 +31,13 @@ venueOwnerRouter.post(
   attachAuthIfPresent,
   validateRequest(createVenueOwnerSchema),
   venueOwnerController.createVenueOwner,
+);
+venueOwnerRouter.put(
+  "/me",
+  requireAuth,
+  authorize(PermissionKeys.WorkspaceVenueOwnerAccess),
+  validateRequest(updateVenueOwnerSelfSchema),
+  venueOwnerController.updateMyVenueOwnerProfile,
 );
 venueOwnerRouter.put(
   "/:venueOwnerId",

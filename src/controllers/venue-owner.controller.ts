@@ -19,6 +19,24 @@ export const venueOwnerController = {
     const venueOwner = await venueOwnerService.getVenueOwnerById(venueOwnerId, includeInactive);
     return sendSuccess(res, "Venue owner fetched", { venueOwner });
   }),
+  getMyVenueOwnerProfile: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Venue owner profile not found", { venueOwner: null });
+    }
+
+    const venueOwner = await venueOwnerService.getMyVenueOwnerProfile({ id: authUser.id });
+    return sendSuccess(res, "Venue owner profile fetched", { venueOwner });
+  }),
+  updateMyVenueOwnerProfile: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Venue owner profile not found", { venueOwner: null });
+    }
+
+    const venueOwner = await venueOwnerService.updateMyVenueOwnerProfile({ id: authUser.id }, req.body);
+    return sendSuccess(res, "Venue owner profile updated", { venueOwner });
+  }),
   updateVenueOwner: asyncHandler(async (req, res) => {
     const venueOwnerId = String(req.params.venueOwnerId);
     const venueOwner = await venueOwnerService.updateVenueOwner(venueOwnerId, req.body);

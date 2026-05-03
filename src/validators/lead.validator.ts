@@ -5,6 +5,8 @@ export const createLeadSchema = z.object({
   body: z.object({
     customerId: z.string().min(24).max(24).optional(),
     vendorId: z.string().min(24).max(24),
+    venueOwnerId: z.string().min(24).max(24).optional(),
+    venuePackageName: z.string().max(120).optional().default(""),
     eventDate: z.coerce.date(),
     eventSlot: z.string().optional().default("Full Day"),
     location: z.string().min(2),
@@ -32,6 +34,8 @@ export const updateLeadSchema = z.object({
     .object({
       eventDate: z.coerce.date().optional(),
       eventSlot: z.string().optional(),
+      venueOwnerId: z.string().min(24).max(24).optional(),
+      venuePackageName: z.string().max(120).optional(),
       location: z.string().min(2).optional(),
       message: z.string().optional(),
       status: z.enum(LEAD_STATUSES).optional(),

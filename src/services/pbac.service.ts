@@ -176,6 +176,7 @@ export async function bootstrapDefaultPbacCatalog() {
     { key: SystemRoleKeys.VendorAdmin, name: "Vendor Admin", description: "Vendor operations administrator" },
     { key: SystemRoleKeys.AccountsAdmin, name: "Accounts Admin", description: "Accounts and package operations administrator" },
     { key: SystemRoleKeys.Vendor, name: "Vendor", description: "Vendor workspace user" },
+    { key: SystemRoleKeys.VenueOwner, name: "Venue Owner", description: "Venue owner workspace user" },
     { key: SystemRoleKeys.Customer, name: "Customer", description: "Customer workspace user" },
   ];
 

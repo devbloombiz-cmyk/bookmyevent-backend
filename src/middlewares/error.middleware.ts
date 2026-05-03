@@ -50,6 +50,42 @@ export function errorMiddleware(error: unknown, _req: Request, res: Response, _n
     });
   }
 
+  const duplicateKeyError =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    Number((error as { code?: number }).code) === 11000;
+
+  if (duplicateKeyError) {
+    const keyValue =
+      typeof error === "object" && error !== null && "keyValue" in error
+        ? ((error as { keyValue?: Record<string, unknown> }).keyValue ?? {})
+        : {};
+
+    const duplicateFields = Object.keys(keyValue);
+    const message = duplicateFields.includes("userId")
+      ? "This account is already linked to another profile. Please login with the existing account or use a different email/mobile."
+      : duplicateFields.length
+        ? `${duplicateFields.join(", ")} already exists. Please use a different value.`
+        : "Duplicate value already exists. Please use a different value.";
+
+    logger.warn(
+      {
+        error: serializeUnknownError(error),
+        path: _req.originalUrl,
+        method: _req.method,
+        requestId: _req.id,
+      },
+      "Duplicate key request rejected",
+    );
+
+    return res.status(409).json({
+      success: false,
+      message,
+      data: {},
+    });
+  }
+
   const statusCode =
     error instanceof ApiError
       ? error.statusCode

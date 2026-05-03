@@ -94,6 +94,11 @@ export const authController = {
     return sendSuccess(res, "Vendor signup successful", { user }, 201);
   }),
 
+  signupVenueOwner: asyncHandler(async (req, res) => {
+    const user = await authService.signupVenueOwner(req.body);
+    return sendSuccess(res, "Venue owner signup successful", { user }, 201);
+  }),
+
   loginCustomer: asyncHandler(async (req, res) => {
     const result = await authService.loginCustomer(req.body);
     const csrfToken = setAuthCookies(res, result.tokens);
@@ -110,6 +115,18 @@ export const authController = {
     const result = await authService.loginVendor(req.body);
     const csrfToken = setAuthCookies(res, result.tokens);
     return sendSuccess(res, "Vendor login successful", {
+      user: result.user,
+      permissions: result.permissions,
+      roleKeys: result.roleKeys,
+      navigation: result.navigation,
+      csrfToken,
+    });
+  }),
+
+  loginVenueOwner: asyncHandler(async (req, res) => {
+    const result = await authService.loginVenueOwner(req.body);
+    const csrfToken = setAuthCookies(res, result.tokens);
+    return sendSuccess(res, "Venue owner login successful", {
       user: result.user,
       permissions: result.permissions,
       roleKeys: result.roleKeys,

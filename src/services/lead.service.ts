@@ -4,7 +4,7 @@ import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 import { bookingRepository } from "../repositories/booking.repository";
 import { availabilityRepository } from "../repositories/availability.repository";
-import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
+import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -23,8 +23,11 @@ const validLeadTransitions: Record<string, string[]> = {
 };
 
 async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: string) {
-  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-    return resolveVendorIdForAuthUser(authUser);
+  if (
+    authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+    authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+  ) {
+    return resolveVendorIdForScopedUser(authUser);
   }
 
   return requestedVendorId;
@@ -47,16 +50,21 @@ export const leadService = {
     return leadRepository.create({ ...payload, vendorId, customerId });
   },
   listLeads: async (authUser: AuthUser, filters: Record<string, unknown>) => {
-    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-      const vendorId = await resolveVendorIdForAuthUser(authUser);
-      return leadRepository.findByVendor(vendorId);
+    const requestedStatus = typeof filters.status === "string" ? filters.status : undefined;
+
+    if (
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
+      const vendorId = await resolveVendorIdForScopedUser(authUser);
+      return leadRepository.findByVendor(vendorId, requestedStatus);
     }
 
     if (typeof filters.vendorId === "string" && filters.vendorId) {
-      return leadRepository.findByVendor(filters.vendorId);
+      return leadRepository.findByVendor(filters.vendorId, requestedStatus);
     }
 
-    return leadRepository.findAll();
+    return leadRepository.findAll({ status: requestedStatus });
   },
   updateLead: async (leadId: string, payload: Record<string, unknown>, authUser: AuthUser) => {
     const existingLead = await leadRepository.findById(leadId);
@@ -64,8 +72,11 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-      const vendorId = await resolveVendorIdForAuthUser(authUser);
+    if (
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
+      const vendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existingLead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to update this lead");
       }
@@ -96,8 +107,11 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-      const vendorId = await resolveVendorIdForAuthUser(authUser);
+    if (
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
+      const vendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(lead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to convert this lead");
       }

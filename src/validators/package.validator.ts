@@ -5,7 +5,10 @@ const baseVendorPackageSchema = z.object({
   title: z.string().min(2),
   description: z.string().default(""),
   price: z.number().nonnegative(),
+  duration: z.string().max(120).optional().default(""),
   inclusions: z.array(z.string()).default([]),
+  features: z.array(z.string()).default([]),
+  coverImage: z.string().optional().default(""),
   isActive: z.boolean().optional(),
 });
 

@@ -7,7 +7,7 @@ const personDetailSchema = new Schema(
     gender: { type: String, enum: ["male", "female", "other"], required: true },
     idProofType: {
       type: String,
-      enum: ["aadhaar", "passport", "driving_license", "voter_id", "other"],
+      enum: ["aadhaar", "passport", "driving_license", "voter_id", "pan_card"],
       required: true,
     },
     idNumber: { type: String, required: true, trim: true },

@@ -14,7 +14,7 @@ const mimeTypeToExtensions: Record<string, string[]> = {
 };
 
 export const MAX_UPLOAD_FILE_SIZE_BYTES = 2 * 1024 * 1024;
-export const S3_UPLOAD_FOLDERS = ["vendors", "services", "locations"] as const;
+export const S3_UPLOAD_FOLDERS = ["vendors", "services", "locations", "venues"] as const;
 
 export type S3UploadFolder = (typeof S3_UPLOAD_FOLDERS)[number];
 
@@ -55,14 +55,15 @@ export function parseS3UploadFolder(input: unknown, fallback: S3UploadFolder): S
   if (
     normalizedFolder === "vendors" ||
     normalizedFolder === "services" ||
-    normalizedFolder === "locations"
+    normalizedFolder === "locations" ||
+    normalizedFolder === "venues"
   ) {
     return normalizedFolder;
   }
 
   throw new ApiError(
     400,
-    "Invalid upload folder. Allowed folders are: vendors, services, locations",
+    "Invalid upload folder. Allowed folders are: vendors, services, locations, venues",
   );
 }
 

@@ -32,6 +32,7 @@ const textFields = [
   "city",
   "locationDisplayName",
   "description",
+  "websiteUrl",
   "paymentTerms",
   "travelCost",
   "deliveryTime",
@@ -79,11 +80,24 @@ const buildNormalizedVendorPayload = (
     };
   }
 
+  if (!options.partial || "websiteUrl" in payload) {
+    normalized.websiteUrl = normalizeUrl(payload.websiteUrl);
+  }
+
   if (!options.partial || "portfolioImages" in payload) {
     normalized.portfolioImages = Array.isArray(payload.portfolioImages)
       ? payload.portfolioImages
           .filter((item): item is string => typeof item === "string")
           .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+  }
+
+  if (!options.partial || "videoLinks" in payload) {
+    normalized.videoLinks = Array.isArray(payload.videoLinks)
+      ? payload.videoLinks
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => normalizeUrl(item))
           .filter(Boolean)
       : [];
   }

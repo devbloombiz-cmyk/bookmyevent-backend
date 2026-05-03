@@ -95,16 +95,24 @@ async function signupByRole(payload: {
   password: string;
   role: UserRole;
 }) {
-  const existingUser = await userRepository.findByEmail(payload.email);
-  if (existingUser) {
+  const normalizedEmail = payload.email.trim().toLowerCase();
+  const normalizedMobile = payload.mobile.trim();
+
+  const existingUserByEmail = await userRepository.findByEmail(normalizedEmail);
+  if (existingUserByEmail) {
     throw new ApiError(409, "Email is already registered");
+  }
+
+  const existingUserByMobile = await userRepository.findByMobile(normalizedMobile);
+  if (existingUserByMobile) {
+    throw new ApiError(409, "Mobile number is already registered");
   }
 
   const passwordHash = await hashPassword(payload.password);
   const user = await userRepository.create({
     name: payload.name,
-    email: payload.email,
-    mobile: payload.mobile,
+    email: normalizedEmail,
+    mobile: normalizedMobile,
     passwordHash,
     role: payload.role,
   });
@@ -369,6 +377,8 @@ export const authService = {
     signupByRole({ ...payload, role: "customer" }),
   signupVendor: (payload: { name: string; email: string; mobile: string; password: string }) =>
     signupByRole({ ...payload, role: "vendor" }),
+  signupVenueOwner: (payload: { name: string; email: string; mobile: string; password: string }) =>
+    signupByRole({ ...payload, role: "venue_owner" }),
   loginCustomer: (payload: { identifier?: string; email?: string; mobile?: string; password: string }) =>
     loginByRequiredPermission({
       ...payload,
@@ -378,6 +388,11 @@ export const authService = {
     loginByRequiredPermission({
       ...payload,
       permission: PermissionKeys.WorkspaceVendorAccess,
+    }),
+  loginVenueOwner: (payload: { identifier?: string; email?: string; mobile?: string; password: string }) =>
+    loginByRequiredPermission({
+      ...payload,
+      permission: PermissionKeys.WorkspaceVenueOwnerAccess,
     }),
   loginAdmin: (payload: { identifier?: string; email?: string; mobile?: string; password: string }) =>
     loginByRequiredPermission({

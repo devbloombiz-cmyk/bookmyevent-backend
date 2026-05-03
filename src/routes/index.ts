@@ -2,6 +2,7 @@ import { Router } from "express";
 import { authRouter } from "./auth.route";
 import { availabilityRouter } from "./availability.route";
 import { bookingRouter } from "./booking.route";
+import { blogRouter } from "./blog.route";
 import { categoryRouter } from "./category.route";
 import { galleryRouter } from "./gallery.route";
 import { guruvayoorRequestRouter } from "./guruvayoor-request.route";
@@ -18,6 +19,7 @@ const apiV1Router = Router();
 
 apiV1Router.use(healthRouter);
 apiV1Router.use("/auth", authRouter);
+apiV1Router.use("/blogs", blogRouter);
 apiV1Router.use("/vendors", vendorRouter);
 apiV1Router.use("/categories", categoryRouter);
 apiV1Router.use("/packages", packageRouter);

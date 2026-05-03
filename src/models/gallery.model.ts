@@ -8,6 +8,8 @@ const gallerySchema = new Schema(
     mediaType: { type: String, enum: ["image", "video"], default: "image" },
     mediaUrl: { type: String, required: true, trim: true },
     thumbnailUrl: { type: String, default: "", trim: true },
+    videoPlatform: { type: String, enum: ["youtube", "instagram", "other"], default: "other" },
+    embedUrl: { type: String, default: "", trim: true },
     sourceType: { type: String, enum: ["admin", "vendor"], default: "vendor" },
     vendorId: { type: String, default: "", trim: true },
     location: { type: String, default: "", trim: true },

@@ -26,7 +26,7 @@ export const listBlogSchema = z.object({
     includeInactive: z.enum(["true", "false"]).optional(),
     search: z.string().min(1).optional(),
     isFeatured: z.enum(["true", "false"]).optional(),
-    limit: z.coerce.number().int().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
   }),
   params: z.object({}).default({}),
 });

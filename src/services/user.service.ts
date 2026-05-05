@@ -39,6 +39,7 @@ const ALLOWED_SUBADMIN_PERMISSION_KEYS = new Set<PermissionKey>([
   PermissionKeys.LeadReadAny,
   PermissionKeys.LeadUpdateAny,
   PermissionKeys.LeadConvertAny,
+  PermissionKeys.UploadImage,
   PermissionKeys.UserSystemRead,
   PermissionKeys.UserSystemCreate,
   PermissionKeys.UserProfileRead,

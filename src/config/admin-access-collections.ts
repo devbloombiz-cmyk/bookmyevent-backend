@@ -21,10 +21,12 @@ export const AdminAccessCollectionPermissionMap: Record<AccessCollectionKey, Per
   [AdminAccessCollectionKeys.Vendors]: [
     PermissionKeys.VendorRead,
     PermissionKeys.VendorUpdateAny,
+    PermissionKeys.UploadImage,
   ],
   [AdminAccessCollectionKeys.Catalog]: [
     PermissionKeys.CategoryManage,
     PermissionKeys.LocationManage,
+    PermissionKeys.UploadImage,
   ],
   [AdminAccessCollectionKeys.Packages]: [
     PermissionKeys.PackagePlatformRead,

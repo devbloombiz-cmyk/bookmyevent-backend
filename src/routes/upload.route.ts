@@ -10,7 +10,11 @@ const uploadRouter = Router();
 uploadRouter.post(
 	"/image",
 	requireAuth,
-	authorize(PermissionKeys.UploadImage),
+	authorize([
+		PermissionKeys.UploadImage,
+		PermissionKeys.VendorUpdateAny,
+		PermissionKeys.CategoryManage,
+	]),
 	imageUpload.single("file"),
 	uploadController.uploadImage,
 );

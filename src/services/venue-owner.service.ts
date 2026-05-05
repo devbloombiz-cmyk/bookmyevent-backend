@@ -321,8 +321,14 @@ const normalizePayload = (payload: Record<string, unknown>, options: { partial: 
     normalized.mobile = normalizeText(payload.mobile);
   }
 
-  if (!options.partial || "profileImages" in payload) {
-    normalized.profileImages = listFields(payload.profileImages);
+  if (!options.partial || "profileImages" in payload || "profileImage" in payload) {
+    const profileImages = listFields(payload.profileImages);
+    const legacyProfileImage = normalizeUrl(payload.profileImage);
+    normalized.profileImages = profileImages.length
+      ? profileImages
+      : legacyProfileImage
+        ? [legacyProfileImage]
+        : [];
   }
 
   if (!options.partial || "venuePackages" in payload) {

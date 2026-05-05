@@ -228,6 +228,7 @@ export const createVenueOwnerSchema = z.object({
     description: z.string().optional().default(""),
     approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("pending"),
     isActive: z.boolean().optional().default(true),
+    profileImage: z.url().optional(),
     profileImages: z.array(z.url()).optional().default([]),
     venuePackages: z.array(venuePackageSchema).optional().default([]),
   }).superRefine((payload, ctx) => {
@@ -294,6 +295,7 @@ export const updateVenueOwnerSchema = z.object({
       description: z.string().optional(),
       approvalStatus: z.enum(["pending", "active", "disabled"]).optional(),
       isActive: z.boolean().optional(),
+      profileImage: z.url().optional(),
       profileImages: z.array(z.url()).optional(),
       venuePackages: z.array(venuePackageSchema).optional(),
     })

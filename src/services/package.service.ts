@@ -3,6 +3,7 @@ import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
+import { subscriptionService } from "./subscription.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -11,8 +12,15 @@ type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
 export const packageService = {
   createVendorPackage: async (payload: Record<string, unknown>, authUser: AuthUser) => {
     if (authUser.permissions.includes(PermissionKeys.PackageVendorCreateOwn)) {
-      const vendorId = await resolveVendorIdForAuthUser(authUser);
-      return packageRepository.createVendorPackage({ ...payload, vendorId });
+      const ownVendorId = await resolveVendorIdForAuthUser(authUser);
+      const packages = await packageRepository.listVendorPackages(ownVendorId, true);
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "vendor" },
+        "maxPackages",
+        packages.length + 1,
+      );
+
+      return packageRepository.createVendorPackage({ ...payload, vendorId: ownVendorId });
     }
 
     return packageRepository.createVendorPackage(payload);

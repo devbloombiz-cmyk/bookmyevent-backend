@@ -5,6 +5,7 @@ import { ApiError } from "../utils/api-error";
 import { comparePassword, hashPassword } from "../utils/password";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../utils/tokens";
 import { UserRole } from "../types/domain";
+import { logger } from "../config/logger";
 import { otpSessionRepository } from "../repositories/otp-session.repository";
 import { refreshTokenRepository } from "../repositories/refresh-token.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -163,12 +164,113 @@ type OtpTarget = {
   emailForDelivery?: string;
   email?: string;
   mobile?: string;
+  authUser?: {
+    id: string;
+    name: string;
+    email?: string;
+    mobile?: string;
+    role: UserRole;
+  };
 };
 
-async function resolveOtpTarget(payload: { identifier?: string; email?: string; mobile?: string }) {
+type OtpPortal = "user" | "vendor" | "venue-owner" | "admin";
+
+type OtpAuditMeta = {
+  ip?: string;
+  userAgent?: string;
+};
+
+function resolveOtpPortal(value?: string): OtpPortal {
+  if (value === "vendor" || value === "venue-owner" || value === "admin") {
+    return value;
+  }
+
+  return "user";
+}
+
+function getPortalPermission(portal: OtpPortal): PermissionKey | null {
+  if (portal === "vendor") {
+    return PermissionKeys.WorkspaceVendorAccess;
+  }
+
+  if (portal === "venue-owner") {
+    return PermissionKeys.WorkspaceVenueOwnerAccess;
+  }
+
+  if (portal === "admin") {
+    return PermissionKeys.WorkspaceAdminAccess;
+  }
+
+  return null;
+}
+
+function maskIdentifier(identifier: string) {
+  const source = String(identifier || "").trim();
+  if (!source) {
+    return "unknown";
+  }
+
+  if (source.includes("@")) {
+    const [name, domain] = source.split("@");
+    const visible = name.slice(0, 2);
+    return `${visible}***@${domain || "***"}`;
+  }
+
+  return `${source.slice(0, 2)}***${source.slice(-2)}`;
+}
+
+async function resolveOtpTarget(payload: {
+  identifier?: string;
+  email?: string;
+  mobile?: string;
+  portal?: string;
+}) {
   const identifier = resolveLoginIdentifier(payload);
   if (!identifier) {
     throw new ApiError(400, "OTP identifier is required");
+  }
+
+  const portal = resolveOtpPortal(payload.portal);
+  const requiredPortalPermission = getPortalPermission(portal);
+
+  if (requiredPortalPermission) {
+    const existingUser = await userRepository.findByEmailOrMobile(identifier);
+    if (!existingUser) {
+      throw new ApiError(401, "Account not found for selected portal");
+    }
+
+    if (!existingUser.isActive) {
+      throw new ApiError(403, "Account is deactivated");
+    }
+
+    const accessProfile = await resolveAccessProfileForUser(existingUser.id);
+    if (!hasPermission(accessProfile.permissions, requiredPortalPermission)) {
+      throw new ApiError(403, "Forbidden");
+    }
+
+    const normalizedEmail = existingUser.email?.trim().toLowerCase() || "";
+    if (!normalizedEmail && !env.OTP_DEV_FALLBACK_ENABLED) {
+      throw new ApiError(
+        400,
+        "Selected portal account requires a registered email for OTP delivery.",
+      );
+    }
+
+    return {
+      identifier,
+      otpLookupKey: normalizedEmail || `mobile:${existingUser.mobile || identifier}`,
+      loginMode: identifier.includes("@") ? "email" : "mobile",
+      emailForDelivery: normalizedEmail,
+      email: normalizedEmail,
+      mobile: existingUser.mobile,
+      authUser: {
+        id: existingUser.id,
+        name: existingUser.name,
+        email: existingUser.email,
+        mobile: existingUser.mobile,
+        role: existingUser.role,
+      },
+    } satisfies OtpTarget;
   }
 
   const isEmailIdentifier = identifier.includes("@");
@@ -289,7 +391,24 @@ async function refreshAuthToken(refreshToken: string) {
   };
 }
 
-async function requestLoginOtp(payload: { identifier?: string; email?: string; mobile?: string }) {
+async function requestLoginOtp(
+  payload: { identifier?: string; email?: string; mobile?: string; portal?: string },
+  auditMeta?: OtpAuditMeta,
+) {
+  const portal = resolveOtpPortal(payload.portal);
+  const maskedIdentifier = maskIdentifier(resolveLoginIdentifier(payload));
+
+  logger.info(
+    {
+      event: "auth.otp.request.started",
+      portal,
+      identifier: maskedIdentifier,
+      ip: auditMeta?.ip,
+      userAgent: auditMeta?.userAgent,
+    },
+    "OTP request started",
+  );
+
   const target = await resolveOtpTarget(payload);
   const lastIssuedOtp = await otpSessionRepository.findLastIssuedByEmail(target.otpLookupKey);
 
@@ -319,9 +438,30 @@ async function requestLoginOtp(payload: { identifier?: string; email?: string; m
       });
     }
   } catch (error) {
+    logger.warn(
+      {
+        event: "auth.otp.request.failed",
+        portal,
+        identifier: maskedIdentifier,
+        ip: auditMeta?.ip,
+        userAgent: auditMeta?.userAgent,
+      },
+      "OTP request failed while sending code",
+    );
     await otpSessionRepository.deleteById(otpSession.id);
     throw error;
   }
+
+  logger.info(
+    {
+      event: "auth.otp.request.succeeded",
+      portal,
+      identifier: maskedIdentifier,
+      ip: auditMeta?.ip,
+      userAgent: auditMeta?.userAgent,
+    },
+    "OTP request completed",
+  );
 
   return {
     identifier: target.identifier,
@@ -336,7 +476,11 @@ async function verifyLoginOtp(payload: {
   email?: string;
   mobile?: string;
   otp: string;
-}) {
+  portal?: string;
+}, auditMeta?: OtpAuditMeta) {
+  const portal = resolveOtpPortal(payload.portal);
+  const maskedIdentifier = maskIdentifier(resolveLoginIdentifier(payload));
+
   const target = await resolveOtpTarget(payload);
   const otpSession = await otpSessionRepository.findLatestActiveByEmail(target.otpLookupKey);
 
@@ -355,17 +499,44 @@ async function verifyLoginOtp(payload: {
 
   if (!secureOtpHashMatches(otpSession.otpHash, payload.otp)) {
     await otpSessionRepository.incrementAttempts(otpSession.id);
+    logger.warn(
+      {
+        event: "auth.otp.verify.failed",
+        portal,
+        identifier: maskedIdentifier,
+        reason: "invalid_otp",
+        ip: auditMeta?.ip,
+        userAgent: auditMeta?.userAgent,
+      },
+      "OTP verification failed",
+    );
     throw new ApiError(401, "Invalid OTP");
   }
 
   await otpSessionRepository.deleteById(otpSession.id);
 
   const user =
-    target.loginMode === "email" ? await ensureCustomerFromEmail(target.email || "") : await ensureCustomerFromMobile(target.mobile || "");
+    target.authUser ||
+    (target.loginMode === "email"
+      ? await ensureCustomerFromEmail(target.email || "")
+      : await ensureCustomerFromMobile(target.mobile || ""));
 
   if (!user.isActive) {
     throw new ApiError(403, "Account is deactivated");
   }
+
+  logger.info(
+    {
+      event: "auth.otp.verify.succeeded",
+      portal,
+      identifier: maskedIdentifier,
+      userId: user.id,
+      role: user.role,
+      ip: auditMeta?.ip,
+      userAgent: auditMeta?.userAgent,
+    },
+    "OTP verification succeeded",
+  );
 
   return buildAuthSession(
     user as unknown as { id: string; name: string; email?: string; mobile?: string; role: UserRole },

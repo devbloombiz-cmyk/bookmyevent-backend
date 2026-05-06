@@ -5,6 +5,7 @@ import { locationService } from "./location.service";
 import { ApiError } from "../utils/api-error";
 import type { UserRole } from "../types/domain";
 import { hashPassword } from "../utils/password";
+import { subscriptionService } from "./subscription.service";
 
 const defaultIncludedServiceItems = [
   "Hall Rental",
@@ -610,6 +611,58 @@ export const venueOwnerService = {
     const venueOwnerByUserId = await venueOwnerRepository.findByUserId(authUser.id);
     if (venueOwnerByUserId) {
       const normalizedPayload = normalizePayload(payload, { partial: true });
+
+      if (Array.isArray(normalizedPayload.venuePackages)) {
+        const packageCount = normalizedPayload.venuePackages.length;
+        const totalVideos = normalizedPayload.venuePackages.reduce((acc, pkg) => {
+          if (!pkg || typeof pkg !== "object") {
+            return acc;
+          }
+
+          const links = (pkg as Record<string, unknown>).videoLinks;
+          const count = Array.isArray(links) ? links.length : 0;
+          return acc + count;
+        }, 0);
+        const packagePortfolioImages = normalizedPayload.venuePackages.reduce((acc, pkg) => {
+          if (!pkg || typeof pkg !== "object") {
+            return acc;
+          }
+
+          const images = (pkg as Record<string, unknown>).portfolioImages;
+          const count = Array.isArray(images) ? images.length : 0;
+          return acc + count;
+        }, 0);
+        const topLevelProfileImages = Array.isArray(normalizedPayload.profileImages)
+          ? normalizedPayload.profileImages.length
+          : Array.isArray(venueOwnerByUserId.profileImages)
+            ? venueOwnerByUserId.profileImages.length
+            : 0;
+
+        await subscriptionService.assertWithinLimit(
+          { id: authUser.id, role: "venue_owner" },
+          "maxPackages",
+          packageCount,
+        );
+        await subscriptionService.assertWithinLimit(
+          { id: authUser.id, role: "venue_owner" },
+          "maxVideoLinks",
+          totalVideos,
+        );
+        await subscriptionService.assertWithinLimit(
+          { id: authUser.id, role: "venue_owner" },
+          "maxPortfolioImages",
+          packagePortfolioImages + topLevelProfileImages,
+        );
+      }
+
+      if (Array.isArray(normalizedPayload.profileImages)) {
+        await subscriptionService.assertWithinLimit(
+          { id: authUser.id, role: "venue_owner" },
+          "maxPortfolioImages",
+          normalizedPayload.profileImages.length,
+        );
+      }
+
       await syncLocationIfPresent(normalizedPayload);
 
       const updatedVenueOwner = await venueOwnerRepository.updateById(
@@ -640,6 +693,58 @@ export const venueOwnerService = {
     }
 
     const normalizedPayload = normalizePayload(payload, { partial: true });
+
+    if (Array.isArray(normalizedPayload.venuePackages)) {
+      const packageCount = normalizedPayload.venuePackages.length;
+      const totalVideos = normalizedPayload.venuePackages.reduce((acc, pkg) => {
+        if (!pkg || typeof pkg !== "object") {
+          return acc;
+        }
+
+        const links = (pkg as Record<string, unknown>).videoLinks;
+        const count = Array.isArray(links) ? links.length : 0;
+        return acc + count;
+      }, 0);
+      const packagePortfolioImages = normalizedPayload.venuePackages.reduce((acc, pkg) => {
+        if (!pkg || typeof pkg !== "object") {
+          return acc;
+        }
+
+        const images = (pkg as Record<string, unknown>).portfolioImages;
+        const count = Array.isArray(images) ? images.length : 0;
+        return acc + count;
+      }, 0);
+      const topLevelProfileImages = Array.isArray(normalizedPayload.profileImages)
+        ? normalizedPayload.profileImages.length
+        : Array.isArray(venueOwner.profileImages)
+          ? venueOwner.profileImages.length
+          : 0;
+
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "venue_owner" },
+        "maxPackages",
+        packageCount,
+      );
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "venue_owner" },
+        "maxVideoLinks",
+        totalVideos,
+      );
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "venue_owner" },
+        "maxPortfolioImages",
+        packagePortfolioImages + topLevelProfileImages,
+      );
+    }
+
+    if (Array.isArray(normalizedPayload.profileImages)) {
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "venue_owner" },
+        "maxPortfolioImages",
+        normalizedPayload.profileImages.length,
+      );
+    }
+
     await syncLocationIfPresent(normalizedPayload);
 
     const updatedVenueOwner = await venueOwnerRepository.updateById(

@@ -7,6 +7,7 @@ import { galleryService } from "./gallery.service";
 import { locationService } from "./location.service";
 import type { UserRole } from "../types/domain";
 import type { AuthenticatedUser } from "../types/auth-user";
+import { subscriptionService } from "./subscription.service";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const normalizeUrl = (value: unknown) => {
@@ -298,6 +299,23 @@ export const vendorService = {
     const vendorByUserId = await vendorRepository.findByUserId(authUser.id);
     if (vendorByUserId) {
       const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
+
+      if (Array.isArray(normalizedPayload.portfolioImages)) {
+        await subscriptionService.assertWithinLimit(
+          { id: authUser.id, role: "vendor" },
+          "maxPortfolioImages",
+          normalizedPayload.portfolioImages.length,
+        );
+      }
+
+      if (Array.isArray(normalizedPayload.videoLinks)) {
+        await subscriptionService.assertWithinLimit(
+          { id: authUser.id, role: "vendor" },
+          "maxVideoLinks",
+          normalizedPayload.videoLinks.length,
+        );
+      }
+
       await syncLocationIfPresent(normalizedPayload);
 
       const updatedVendor = await vendorRepository.updateById(String(vendorByUserId._id), normalizedPayload);
@@ -325,6 +343,23 @@ export const vendorService = {
     }
 
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
+
+    if (Array.isArray(normalizedPayload.portfolioImages)) {
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "vendor" },
+        "maxPortfolioImages",
+        normalizedPayload.portfolioImages.length,
+      );
+    }
+
+    if (Array.isArray(normalizedPayload.videoLinks)) {
+      await subscriptionService.assertWithinLimit(
+        { id: authUser.id, role: "vendor" },
+        "maxVideoLinks",
+        normalizedPayload.videoLinks.length,
+      );
+    }
+
     await syncLocationIfPresent(normalizedPayload);
 
     const updatedVendor = await vendorRepository.updateById(String(vendor._id), normalizedPayload);

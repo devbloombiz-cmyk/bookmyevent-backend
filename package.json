@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "seed:locations": "tsx src/scripts/seed-locations.ts",
+    "test:redirect-matrix": "tsx src/scripts/redirect-matrix.ts",
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",

@@ -33,6 +33,7 @@ const envSchema = z
     AWS_BUCKET_NAME: z.string().optional(),
     RAZORPAY_KEY_ID: z.string().optional(),
     RAZORPAY_KEY_SECRET: z.string().optional(),
+    RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
     REDIS_URL: z.string().optional(),
     ALLOWED_ORIGINS: z.string().optional(),
     TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(1),

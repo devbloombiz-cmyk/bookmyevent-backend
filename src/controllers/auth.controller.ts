@@ -2,6 +2,7 @@ import crypto from "crypto";
 import type { Response } from "express";
 import { env } from "../config/env";
 import { authService } from "../services/auth.service";
+import { ApiError } from "../utils/api-error";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { parseCookieHeader, serializeCookie } from "../utils/cookie";
@@ -111,28 +112,18 @@ export const authController = {
     });
   }),
 
-  loginVendor: asyncHandler(async (req, res) => {
-    const result = await authService.loginVendor(req.body);
-    const csrfToken = setAuthCookies(res, result.tokens);
-    return sendSuccess(res, "Vendor login successful", {
-      user: result.user,
-      permissions: result.permissions,
-      roleKeys: result.roleKeys,
-      navigation: result.navigation,
-      csrfToken,
-    });
+  loginVendor: asyncHandler(async () => {
+    throw new ApiError(
+      410,
+      "Password login for vendor portal is deprecated. Use OTP login via /auth/send-otp and /auth/verify-otp.",
+    );
   }),
 
-  loginVenueOwner: asyncHandler(async (req, res) => {
-    const result = await authService.loginVenueOwner(req.body);
-    const csrfToken = setAuthCookies(res, result.tokens);
-    return sendSuccess(res, "Venue owner login successful", {
-      user: result.user,
-      permissions: result.permissions,
-      roleKeys: result.roleKeys,
-      navigation: result.navigation,
-      csrfToken,
-    });
+  loginVenueOwner: asyncHandler(async () => {
+    throw new ApiError(
+      410,
+      "Password login for venue-owner portal is deprecated. Use OTP login via /auth/send-otp and /auth/verify-otp.",
+    );
   }),
 
   loginAdmin: asyncHandler(async (req, res) => {
@@ -148,12 +139,18 @@ export const authController = {
   }),
 
   requestOtp: asyncHandler(async (req, res) => {
-    const result = await authService.requestLoginOtp(req.body);
+    const result = await authService.requestLoginOtp(req.body, {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     return sendSuccess(res, "OTP sent to email", result);
   }),
 
   verifyOtp: asyncHandler(async (req, res) => {
-    const result = await authService.verifyLoginOtp(req.body);
+    const result = await authService.verifyLoginOtp(req.body, {
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
     const csrfToken = setAuthCookies(res, result.tokens);
     return sendSuccess(res, "OTP verified", {
       user: result.user,

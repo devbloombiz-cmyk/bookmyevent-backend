@@ -170,6 +170,7 @@ type OtpTarget = {
     email?: string;
     mobile?: string;
     role: UserRole;
+    isActive: boolean;
   };
 };
 
@@ -262,13 +263,14 @@ async function resolveOtpTarget(payload: {
       loginMode: identifier.includes("@") ? "email" : "mobile",
       emailForDelivery: normalizedEmail,
       email: normalizedEmail,
-      mobile: existingUser.mobile,
+      mobile: existingUser.mobile ?? undefined,
       authUser: {
         id: existingUser.id,
         name: existingUser.name,
-        email: existingUser.email,
-        mobile: existingUser.mobile,
+        email: existingUser.email ?? undefined,
+        mobile: existingUser.mobile ?? undefined,
         role: existingUser.role,
+        isActive: existingUser.isActive,
       },
     } satisfies OtpTarget;
   }

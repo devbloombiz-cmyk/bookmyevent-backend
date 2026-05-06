@@ -1,7 +1,118 @@
-import { hasPortalAccess, resolvePortalLanding, type OtpPortal } from "../../../frontend/src/utils/portal-auth";
-import { resolveWorkspaceLandingPath } from "../../../frontend/src/utils/workspace-landing";
+type OtpPortal = "user" | "vendor" | "venue-owner" | "admin";
 
 type WorkspaceRole = "customer" | "vendor" | "venue_owner" | "super_admin" | "vendor_admin" | "accounts_admin";
+
+const ADMIN_ACCESS = "workspace:admin:access";
+const VENDOR_ACCESS = "workspace:vendor:access";
+const VENUE_OWNER_ACCESS = "workspace:venue-owner:access";
+const CUSTOMER_ACCESS = "workspace:customer:access";
+
+function hasPrefix(path: string, prefix: string) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+function normalizePath(path?: string) {
+  const value = (path || "").trim();
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "";
+  }
+
+  return value;
+}
+
+function roleFallbackPath(role?: WorkspaceRole) {
+  if (role === "super_admin" || role === "vendor_admin" || role === "accounts_admin") {
+    return "/admin";
+  }
+
+  if (role === "vendor") {
+    return "/vendor";
+  }
+
+  if (role === "venue_owner") {
+    return "/venue-owner";
+  }
+
+  return "/";
+}
+
+function isAllowedByPermissions(path: string, permissions: string[]) {
+  if (hasPrefix(path, "/admin")) {
+    return permissions.includes(ADMIN_ACCESS);
+  }
+
+  if (hasPrefix(path, "/vendor")) {
+    return permissions.includes(VENDOR_ACCESS);
+  }
+
+  if (hasPrefix(path, "/venue-owner")) {
+    return permissions.includes(VENUE_OWNER_ACCESS);
+  }
+
+  return true;
+}
+
+function resolveWorkspaceLandingPath(
+  defaultLandingPath: string | undefined,
+  permissions: string[],
+  role?: WorkspaceRole,
+) {
+  const normalizedDefault = normalizePath(defaultLandingPath);
+
+  if (normalizedDefault && isAllowedByPermissions(normalizedDefault, permissions)) {
+    return normalizedDefault;
+  }
+
+  if (permissions.includes(ADMIN_ACCESS)) {
+    return "/admin";
+  }
+
+  if (permissions.includes(VENDOR_ACCESS)) {
+    return "/vendor";
+  }
+
+  if (permissions.includes(VENUE_OWNER_ACCESS)) {
+    return "/venue-owner";
+  }
+
+  if (permissions.includes(CUSTOMER_ACCESS)) {
+    return "/";
+  }
+
+  return roleFallbackPath(role);
+}
+
+function hasPortalAccess(portal: OtpPortal, permissions: string[]) {
+  if (portal === "vendor") {
+    return permissions.includes(VENDOR_ACCESS);
+  }
+
+  if (portal === "venue-owner") {
+    return permissions.includes(VENUE_OWNER_ACCESS);
+  }
+
+  if (portal === "admin") {
+    return permissions.includes(ADMIN_ACCESS);
+  }
+
+  return true;
+}
+
+function resolvePortalLanding(portal: OtpPortal, fallbackPath: string) {
+  if (portal === "vendor") {
+    return "/vendor";
+  }
+
+  if (portal === "venue-owner") {
+    return "/venue-owner";
+  }
+
+  if (portal === "admin") {
+    return "/admin";
+  }
+
+  return fallbackPath;
+}
 
 type RedirectCase = {
   name: string;

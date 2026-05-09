@@ -7,10 +7,10 @@ import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   adminListSubscriptionRequestsSchema,
   adminConfirmSubscriptionPaymentSchema,
+  confirmMyRazorpayPaymentSchema,
   createSubscriptionCheckoutIntentSchema,
   getMySubscriptionSchema,
   listMySubscriptionPlansSchema,
-  subscriptionRazorpayWebhookSchema,
 } from "../validators/subscription.validator";
 
 const subscriptionRouter = Router();
@@ -40,6 +40,14 @@ subscriptionRouter.post(
 );
 
 subscriptionRouter.post(
+  "/confirm-razorpay/me",
+  requireAuth,
+  authorize([PermissionKeys.WorkspaceVendorAccess, PermissionKeys.WorkspaceVenueOwnerAccess]),
+  validateRequest(confirmMyRazorpayPaymentSchema),
+  subscriptionController.confirmMyRazorpayPayment,
+);
+
+subscriptionRouter.post(
   "/admin/confirm-payment/:subscriptionId",
   requireAuth,
   authorize(PermissionKeys.VendorUpdateAny),
@@ -53,12 +61,6 @@ subscriptionRouter.get(
   authorize(PermissionKeys.VendorRead),
   validateRequest(adminListSubscriptionRequestsSchema),
   subscriptionController.listSubscriptionsByAdmin,
-);
-
-subscriptionRouter.post(
-  "/webhooks/razorpay",
-  validateRequest(subscriptionRazorpayWebhookSchema),
-  subscriptionController.razorpayWebhook,
 );
 
 export { subscriptionRouter };

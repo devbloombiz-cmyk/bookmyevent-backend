@@ -8,6 +8,7 @@ import { logger } from "./config/logger";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { enforceJsonRequests, sanitizeRequestMiddleware } from "./middlewares/sanitize.middleware";
 import { apiV1Router } from "./routes";
+import { webhookRouter } from "./routes/webhook.route";
 
 export const app = express();
 
@@ -51,6 +52,11 @@ app.use(
     legacyHeaders: false,
   }),
 );
+
+// Razorpay webhook signature validation requires exact raw request bytes.
+app.use("/api/v1/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }));
+app.use("/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }));
+app.use("/webhooks", webhookRouter);
 
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));

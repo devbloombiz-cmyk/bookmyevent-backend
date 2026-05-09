@@ -1,5 +1,7 @@
 import { AccountSubscriptionModel } from "../models/account-subscription.model";
+import { RazorpayWebhookEventModel } from "../models/razorpay-webhook-event.model";
 import { SubscriptionPlanModel } from "../models/subscription-plan.model";
+import type { ClientSession } from "mongoose";
 
 type ActorType = "vendor" | "venue_owner";
 
@@ -9,14 +11,31 @@ export const subscriptionRepository = {
   getPlanByCode: (code: string) => SubscriptionPlanModel.findOne({ code }),
   listActivePlansByActorType: (actorType: ActorType) =>
     SubscriptionPlanModel.find({ isActive: true, actorTypes: actorType }).sort({ priceInr: 1 }),
-  createAccountSubscription: (payload: Record<string, unknown>) => AccountSubscriptionModel.create(payload),
-  findAccountSubscriptionById: (subscriptionId: string) => AccountSubscriptionModel.findById(subscriptionId),
+  createAccountSubscription: async (payload: Record<string, unknown>, session?: ClientSession) => {
+    if (session) {
+      const rows = await AccountSubscriptionModel.create([payload], { session });
+      return rows[0] ?? null;
+    }
+    return AccountSubscriptionModel.create(payload);
+  },
+  findAccountSubscriptionById: (subscriptionId: string, session?: ClientSession) =>
+    AccountSubscriptionModel.findById(subscriptionId, undefined, session ? { session } : undefined),
   findLatestByActor: (actorType: ActorType, actorId: string) =>
     AccountSubscriptionModel.findOne({ actorType, actorId }).sort({ createdAt: -1 }),
   findByPaymentReference: (paymentReference: string) =>
     AccountSubscriptionModel.findOne({ paymentReference: paymentReference.trim() }),
-  findByProviderPaymentId: (providerPaymentId: string) =>
-    AccountSubscriptionModel.findOne({ providerPaymentId: providerPaymentId.trim() }),
+  findByProviderPaymentId: (providerPaymentId: string, session?: ClientSession) =>
+    AccountSubscriptionModel.findOne(
+      { providerPaymentId: providerPaymentId.trim() },
+      undefined,
+      session ? { session } : undefined,
+    ),
+  findByProviderOrderId: (providerOrderId: string, session?: ClientSession) =>
+    AccountSubscriptionModel.findOne(
+      { providerOrderId: providerOrderId.trim() },
+      undefined,
+      session ? { session } : undefined,
+    ),
   listSubscriptions: (filters: {
     status?: string;
     paymentStatus?: string;
@@ -45,6 +64,26 @@ export const subscriptionRepository = {
     const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(300, filters.limit)) : 120;
     return AccountSubscriptionModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
-  updateSubscriptionById: (subscriptionId: string, payload: Record<string, unknown>) =>
-    AccountSubscriptionModel.findByIdAndUpdate(subscriptionId, payload, { returnDocument: "after" }),
+  updateSubscriptionById: (subscriptionId: string, payload: Record<string, unknown>, session?: ClientSession) =>
+    AccountSubscriptionModel.findByIdAndUpdate(
+      subscriptionId,
+      payload,
+      session ? { returnDocument: "after", session } : { returnDocument: "after" },
+    ),
+  markWebhookEventProcessed: async (eventId: string, eventType: string, payloadHash: string) => {
+    const result = await RazorpayWebhookEventModel.updateOne(
+      { eventId: eventId.trim() },
+      {
+        $setOnInsert: {
+          eventId: eventId.trim(),
+          eventType: eventType.trim(),
+          payloadHash: payloadHash.trim(),
+          receivedAt: new Date(),
+        },
+      },
+      { upsert: true },
+    );
+
+    return result.upsertedCount > 0;
+  },
 };

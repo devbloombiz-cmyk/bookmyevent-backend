@@ -15,6 +15,7 @@ import { uploadRouter } from "./upload.route";
 import { userRouter } from "./user.route";
 import { venueOwnerRouter } from "./venue-owner.route";
 import { vendorRouter } from "./vendor.route";
+import { webhookRouter } from "./webhook.route";
 
 const apiV1Router = Router();
 
@@ -25,6 +26,7 @@ apiV1Router.use("/vendors", vendorRouter);
 apiV1Router.use("/categories", categoryRouter);
 apiV1Router.use("/packages", packageRouter);
 apiV1Router.use("/subscriptions", subscriptionRouter);
+apiV1Router.use("/webhooks", webhookRouter);
 apiV1Router.use("/locations", locationRouter);
 apiV1Router.use("/leads", leadRouter);
 apiV1Router.use("/availability", availabilityRouter);

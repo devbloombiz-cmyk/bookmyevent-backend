@@ -33,6 +33,32 @@ export const adminConfirmSubscriptionPaymentSchema = z.object({
   }),
 });
 
+export const confirmMyRazorpayPaymentSchema = z.object({
+  body: z
+    .object({
+      subscriptionId: z.string().min(1),
+      razorpayOrderId: z.string().optional(),
+      razorpayPaymentId: z.string().optional(),
+      razorpaySignature: z.string().optional(),
+      razorpay_order_id: z.string().optional(),
+      razorpay_payment_id: z.string().optional(),
+      razorpay_signature: z.string().optional(),
+    })
+    .superRefine((body, ctx) => {
+      if (!(body.razorpayOrderId || body.razorpay_order_id)) {
+        ctx.addIssue({ code: "custom", message: "razorpayOrderId is required", path: ["razorpayOrderId"] });
+      }
+      if (!(body.razorpayPaymentId || body.razorpay_payment_id)) {
+        ctx.addIssue({ code: "custom", message: "razorpayPaymentId is required", path: ["razorpayPaymentId"] });
+      }
+      if (!(body.razorpaySignature || body.razorpay_signature)) {
+        ctx.addIssue({ code: "custom", message: "razorpaySignature is required", path: ["razorpaySignature"] });
+      }
+    }),
+  query: z.object({}).default({}),
+  params: z.object({}).default({}),
+});
+
 export const adminListSubscriptionRequestsSchema = z.object({
   body: z.object({}).default({}),
   query: z.object({

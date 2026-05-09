@@ -7,6 +7,9 @@ import { VendorPackageModel } from "../models/vendor-package.model";
 import type { AuthenticatedUser } from "../types/auth-user";
 import crypto from "crypto";
 import { env } from "../config/env";
+import { logger } from "../config/logger";
+import Razorpay from "razorpay";
+import mongoose from "mongoose";
 
 type ActorType = "vendor" | "venue_owner";
 type PlanCode = "FREE" | "PRO_YEARLY_4999";
@@ -268,6 +271,31 @@ const buildPolicySnapshot = async (authUser: Pick<AuthenticatedUser, "id" | "rol
   };
 };
 
+const resolveRazorpayCredentials = () => {
+  if (env.RAZORPAY_ENV === "live") {
+    const keyId = (env.RAZORPAY_KEY_ID_LIVE || env.RAZORPAY_KEY_ID || "").trim();
+    const keySecret = (env.RAZORPAY_KEY_SECRET_LIVE || env.RAZORPAY_KEY_SECRET || "").trim();
+    return { keyId, keySecret };
+  }
+
+  const keyId = (env.RAZORPAY_KEY_ID_TEST || env.RAZORPAY_KEY_ID || "").trim();
+  const keySecret = (env.RAZORPAY_KEY_SECRET_TEST || env.RAZORPAY_KEY_SECRET || "").trim();
+  return { keyId, keySecret };
+};
+
+const buildRazorpayClient = () => {
+  const { keyId, keySecret } = resolveRazorpayCredentials();
+  if (!keyId || !keySecret) {
+    throw new ApiError(500, "Razorpay credentials are not configured for current RAZORPAY_ENV");
+  }
+
+  return {
+    client: new Razorpay({ key_id: keyId, key_secret: keySecret }),
+    keyId,
+    keySecret,
+  };
+};
+
 export const subscriptionService = {
   getMySubscriptionOverview: async (authUser: Pick<AuthenticatedUser, "id" | "role">) => {
     const snapshot = await buildPolicySnapshot(authUser);
@@ -308,12 +336,115 @@ export const subscriptionService = {
       throw new ApiError(403, "Selected plan is not available for this account type");
     }
 
+    const latest = await subscriptionRepository.findLatestByActor(actor.actorType, actor.actorId);
+    if (latest) {
+      const latestEndsAt = normalizeDate((latest as { endsAt?: unknown }).endsAt);
+      const latestPlanCode = String((latest as { planCode?: unknown }).planCode || "");
+      const latestStatus = String((latest as { status?: unknown }).status || "");
+      const latestPaymentStatus = String((latest as { paymentStatus?: unknown }).paymentStatus || "");
+      const latestProvider = String((latest as { paymentProvider?: unknown }).paymentProvider || "");
+
+      const stillActive =
+        latestStatus === "active" &&
+        latestPaymentStatus === "confirmed" &&
+        latestPlanCode === PRO_PLAN_CODE &&
+        (!latestEndsAt || latestEndsAt.getTime() >= Date.now());
+
+      if (stillActive) {
+        throw new ApiError(409, "Pro subscription is already active");
+      }
+
+      const canReusePendingRazorpayOrder =
+        (payload.paymentProvider || "manual") === "razorpay" &&
+        latestPlanCode === PRO_PLAN_CODE &&
+        latestStatus === "pending_payment" &&
+        latestPaymentStatus === "pending" &&
+        latestProvider === "razorpay" &&
+        Boolean((latest as { providerOrderId?: unknown }).providerOrderId);
+
+      if (canReusePendingRazorpayOrder) {
+        const { keyId } = buildRazorpayClient();
+        const amountInr = Number((latest as { amountInr?: unknown }).amountInr || plan.priceInr || 0);
+        const amountPaise = Math.round(amountInr * 100);
+
+        return {
+          subscription: latest,
+          checkout: {
+            provider: "razorpay" as const,
+            keyId,
+            orderId: String((latest as { providerOrderId?: unknown }).providerOrderId || "").trim(),
+            amountPaise,
+            currency: "INR" as const,
+            subscriptionId: String((latest as { _id?: unknown })._id || ""),
+            planCode: payload.planCode,
+          },
+        };
+      }
+    }
+
     const paymentReference = (payload.paymentReference || "").trim();
     if (paymentReference) {
       const existingByRef = await subscriptionRepository.findByPaymentReference(paymentReference);
       if (existingByRef) {
         throw new ApiError(409, "Payment reference already exists");
       }
+    }
+
+    if ((payload.paymentProvider || "manual") === "razorpay") {
+      const { client, keyId } = buildRazorpayClient();
+      const amountInr = Number(plan.priceInr || 0);
+      const amountPaise = Math.round(amountInr * 100);
+
+      if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
+        throw new ApiError(400, "Invalid plan amount for Razorpay checkout");
+      }
+
+      const receipt = `sub_${actor.actorType}_${Date.now()}`.slice(0, 40);
+
+      const order = await client.orders.create({
+        amount: amountPaise,
+        currency: "INR",
+        receipt,
+        notes: {
+          actorType: actor.actorType,
+          actorId: actor.actorId,
+          planCode: payload.planCode,
+        },
+      });
+
+      const subscription = await subscriptionRepository.createAccountSubscription({
+        actorType: actor.actorType,
+        actorId: actor.actorId,
+        planCode: payload.planCode,
+        status: "pending_payment",
+        paymentStatus: "pending",
+        paymentProvider: "razorpay",
+        paymentReference,
+        providerOrderId: String(order.id || "").trim(),
+        amountInr,
+        startsAt: null,
+        endsAt: null,
+        createdBy: authUser.id,
+        updatedBy: authUser.id,
+        metadata: {
+          checkoutMode: "razorpay",
+          razorpayOrderStatus: String(order.status || "created"),
+          currency: "INR",
+        },
+      });
+
+      return {
+        subscription,
+        checkout: {
+          provider: "razorpay",
+          keyId,
+          orderId: String(order.id || "").trim(),
+          amountPaise,
+          currency: "INR",
+          subscriptionId: String((subscription as { _id?: unknown })._id || ""),
+          planCode: payload.planCode,
+        },
+      };
     }
 
     const subscription = await subscriptionRepository.createAccountSubscription({
@@ -334,7 +465,127 @@ export const subscriptionService = {
       },
     });
 
-    return subscription;
+    return {
+      subscription,
+      checkout: null,
+    };
+  },
+  confirmMyRazorpayPayment: async (
+    authUser: Pick<AuthenticatedUser, "id" | "role">,
+    payload: {
+      subscriptionId: string;
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    },
+  ) => {
+    const actor = await resolveActor(authUser);
+    const subscriptionId = payload.subscriptionId.trim();
+    const razorpayOrderId = payload.razorpayOrderId.trim();
+    const razorpayPaymentId = payload.razorpayPaymentId.trim();
+    const razorpaySignature = payload.razorpaySignature.trim();
+
+    if (!subscriptionId || !razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+      throw new ApiError(400, "Missing Razorpay confirmation fields");
+    }
+
+    const { keySecret } = buildRazorpayClient();
+
+    const expectedSignature = crypto
+      .createHmac("sha256", keySecret)
+      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
+      .digest("hex");
+
+    const providedDigest = Buffer.from(razorpaySignature, "hex");
+    const expectedDigest = Buffer.from(expectedSignature, "hex");
+    if (
+      providedDigest.length !== expectedDigest.length ||
+      !crypto.timingSafeEqual(providedDigest, expectedDigest)
+    ) {
+      throw new ApiError(401, "Invalid Razorpay payment signature");
+    }
+
+    const now = new Date();
+    const session = await mongoose.startSession();
+
+    try {
+      let updatedSubscription: unknown = null;
+
+      await session.withTransaction(async () => {
+        const existing = await subscriptionRepository.findAccountSubscriptionById(subscriptionId, session);
+        if (!existing) {
+          throw new ApiError(404, "Subscription request not found");
+        }
+
+        if (existing.actorType !== actor.actorType || String(existing.actorId) !== actor.actorId) {
+          throw new ApiError(403, "Subscription does not belong to current account");
+        }
+
+        if (existing.paymentProvider !== "razorpay") {
+          throw new ApiError(400, "Subscription is not a Razorpay checkout request");
+        }
+
+        if (existing.providerOrderId && existing.providerOrderId !== razorpayOrderId) {
+          throw new ApiError(400, "Razorpay order id mismatch");
+        }
+
+        if (existing.paymentStatus === "confirmed" && existing.status === "active") {
+          if (!existing.providerPaymentId || existing.providerPaymentId === razorpayPaymentId) {
+            updatedSubscription = existing;
+            return;
+          }
+          throw new ApiError(409, "Subscription already confirmed with a different payment id");
+        }
+
+        const paymentAlreadyLinked = await subscriptionRepository.findByProviderPaymentId(
+          razorpayPaymentId,
+          session,
+        );
+
+        if (paymentAlreadyLinked && String(paymentAlreadyLinked._id) !== String(existing._id)) {
+          throw new ApiError(409, "Razorpay payment id is already linked to another subscription");
+        }
+
+        const plan = await subscriptionRepository.getPlanByCode(existing.planCode);
+        if (!plan || !plan.isActive) {
+          throw new ApiError(400, "Plan is missing or inactive");
+        }
+
+        const currentEndsAt = normalizeDate(existing.endsAt);
+        const startsAt = currentEndsAt && currentEndsAt.getTime() > now.getTime() ? currentEndsAt : now;
+        const endsAt = new Date(startsAt.getTime() + 365 * MS_PER_DAY);
+
+        updatedSubscription = await subscriptionRepository.updateSubscriptionById(
+          String(existing._id),
+          {
+            paymentStatus: "confirmed",
+            status: "active",
+            startsAt,
+            endsAt,
+            confirmedAt: now,
+            providerOrderId: razorpayOrderId,
+            providerPaymentId: razorpayPaymentId,
+            providerSignature: razorpaySignature,
+            amountInr: Number(existing.amountInr || plan.priceInr || 0),
+            updatedBy: authUser.id,
+            metadata: {
+              ...(typeof existing.metadata === "object" && existing.metadata ? existing.metadata : {}),
+              paymentConfirmedBy: "razorpay_callback",
+              paymentConfirmedAt: now.toISOString(),
+            },
+          },
+          session,
+        );
+      });
+
+      if (!updatedSubscription) {
+        throw new ApiError(500, "Unable to confirm Razorpay payment");
+      }
+
+      return updatedSubscription;
+    } finally {
+      await session.endSession();
+    }
   },
   confirmPaymentByAdmin: async (
     subscriptionId: string,
@@ -450,63 +701,87 @@ export const subscriptionService = {
 
     return updated;
   },
-  processRazorpayWebhook: async (payload: Record<string, unknown>, signatureHeader: string) => {
-    if (!env.RAZORPAY_WEBHOOK_SECRET) {
-      throw new ApiError(500, "RAZORPAY_WEBHOOK_SECRET is not configured");
+  processRazorpayWebhook: async (rawBody: Buffer, signatureHeader: string) => {
+    const webhookSecret =
+      env.RAZORPAY_ENV === "live"
+        ? env.RAZORPAY_WEBHOOK_SECRET_LIVE || env.RAZORPAY_WEBHOOK_SECRET
+        : env.RAZORPAY_WEBHOOK_SECRET_TEST || env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (!webhookSecret) {
+      throw new ApiError(500, "Razorpay webhook secret is not configured for current RAZORPAY_ENV");
     }
 
-    const expected = crypto
-      .createHmac("sha256", env.RAZORPAY_WEBHOOK_SECRET)
-      .update(JSON.stringify(payload))
-      .digest("hex");
-
-    const provided = String(signatureHeader || "").trim();
-    if (!provided || provided !== expected) {
+    const providedSignature = String(signatureHeader || "").trim();
+    if (!/^[a-fA-F0-9]{64}$/.test(providedSignature)) {
       throw new ApiError(401, "Invalid Razorpay webhook signature");
     }
 
-    const event = String(payload.event || "");
-    const entity =
-      typeof payload.payload === "object" && payload.payload !== null
-        ? (payload.payload as Record<string, unknown>)
-        : {};
+    // Security: compute HMAC directly from the raw request bytes from Razorpay.
+    const expectedDigest = crypto.createHmac("sha256", webhookSecret).update(rawBody).digest();
+    const providedDigest = Buffer.from(providedSignature, "hex");
 
-    const paymentEntity =
-      typeof entity.payment === "object" && entity.payment !== null
-        ? (entity.payment as Record<string, unknown>)
-        : {};
-
-    const paymentObject =
-      typeof paymentEntity.entity === "object" && paymentEntity.entity !== null
-        ? (paymentEntity.entity as Record<string, unknown>)
-        : {};
-
-    const providerPaymentId = String(paymentObject.id || "").trim();
-    const providerOrderId = String(paymentObject.order_id || "").trim();
-    const amountInr = typeof paymentObject.amount === "number" ? Number(paymentObject.amount) / 100 : undefined;
-
-    if (!providerPaymentId) {
-      throw new ApiError(400, "Webhook payload does not contain payment id");
+    // Security: constant-time comparison prevents timing attacks.
+    if (providedDigest.length !== expectedDigest.length || !crypto.timingSafeEqual(providedDigest, expectedDigest)) {
+      throw new ApiError(401, "Invalid Razorpay webhook signature");
     }
 
-    if (event === "payment.captured" || event === "order.paid") {
-      const updated = await subscriptionService.confirmPaymentByProviderPaymentId(providerPaymentId, {
-        providerOrderId,
-        providerSignature: provided,
-        amountInr,
-      });
+    let payload: Record<string, unknown>;
+    try {
+      // Security: only parse JSON after signature verification succeeds.
+      payload = JSON.parse(rawBody.toString("utf8")) as Record<string, unknown>;
+    } catch {
+      throw new ApiError(400, "Invalid Razorpay webhook payload");
+    }
 
+    const eventId = String(payload.id || "").trim();
+    const eventType = String(payload.event || "").trim();
+
+    if (!eventId || !eventType) {
+      throw new ApiError(400, "Webhook payload is missing event id or event type");
+    }
+
+    logger.info({ eventId, eventType }, "Razorpay webhook received");
+
+    const payloadHash = crypto.createHash("sha256").update(rawBody).digest("hex");
+    const isFirstDelivery = await subscriptionRepository.markWebhookEventProcessed(
+      eventId,
+      eventType,
+      payloadHash,
+    );
+
+    if (!isFirstDelivery) {
+      logger.info({ eventId, eventType }, "Duplicate Razorpay webhook ignored");
       return {
         processed: true,
-        event,
-        subscriptionId: String(updated._id),
+        duplicate: true,
+        eventId,
+        eventType,
       };
     }
 
+    const supportedEvents = new Set([
+      "payment.captured",
+      "payment.failed",
+      "order.paid",
+      "refund.processed",
+    ]);
+
+    if (!supportedEvents.has(eventType)) {
+      return {
+        processed: false,
+        duplicate: false,
+        eventId,
+        eventType,
+        reason: "Unsupported event",
+      };
+    }
+
+    // Intentionally no subscription activation logic here yet.
     return {
-      processed: false,
-      event,
-      reason: "Ignored webhook event",
+      processed: true,
+      duplicate: false,
+      eventId,
+      eventType,
     };
   },
   assertWithinLimit: async (

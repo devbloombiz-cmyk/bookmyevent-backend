@@ -1,6 +1,7 @@
 import { subscriptionService } from "../services/subscription.service";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
+import { ApiError } from "../utils/api-error";
 
 export const subscriptionController = {
   getMyOverview: asyncHandler(async (req, res) => {
@@ -33,7 +34,7 @@ export const subscriptionController = {
       return sendSuccess(res, "Unauthorized", { subscription: null }, 401);
     }
 
-    const subscription = await subscriptionService.createCheckoutIntent(
+    const result = await subscriptionService.createCheckoutIntent(
       {
         id: authUser.id,
         role: authUser.role,
@@ -45,7 +46,30 @@ export const subscriptionController = {
       },
     );
 
-    return sendSuccess(res, "Subscription checkout intent created", { subscription }, 201);
+    return sendSuccess(res, "Subscription checkout intent created", result, 201);
+  }),
+  confirmMyRazorpayPayment: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { subscription: null }, 401);
+    }
+
+    const body = req.body as Record<string, unknown>;
+
+    const subscription = await subscriptionService.confirmMyRazorpayPayment(
+      {
+        id: authUser.id,
+        role: authUser.role,
+      },
+      {
+        subscriptionId: String(body.subscriptionId || "").trim(),
+        razorpayOrderId: String(body.razorpayOrderId || body.razorpay_order_id || "").trim(),
+        razorpayPaymentId: String(body.razorpayPaymentId || body.razorpay_payment_id || "").trim(),
+        razorpaySignature: String(body.razorpaySignature || body.razorpay_signature || "").trim(),
+      },
+    );
+
+    return sendSuccess(res, "Razorpay payment confirmed", { subscription });
   }),
   confirmPaymentByAdmin: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
@@ -75,8 +99,13 @@ export const subscriptionController = {
     return sendSuccess(res, "Subscription requests fetched", { subscriptions });
   }),
   razorpayWebhook: asyncHandler(async (req, res) => {
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!rawBody) {
+      throw new ApiError(400, "Webhook endpoint requires raw request body");
+    }
+
     const signatureHeader = String(req.headers["x-razorpay-signature"] || "");
-    const result = await subscriptionService.processRazorpayWebhook(req.body, signatureHeader);
-    return sendSuccess(res, "Razorpay webhook processed", { result });
+    const result = await subscriptionService.processRazorpayWebhook(rawBody, signatureHeader);
+    return res.status(200).json({ success: true, message: "Razorpay webhook received", data: { result } });
   }),
 };

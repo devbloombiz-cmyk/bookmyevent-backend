@@ -645,10 +645,11 @@ export const subscriptionService = {
     paymentStatus?: "pending" | "confirmed" | "failed";
     actorType?: "vendor" | "venue_owner";
     planCode?: PlanCode;
+    page?: number;
     limit?: number;
   }) => {
     await ensureBasePlans();
-    return subscriptionRepository.listSubscriptions(filters);
+    return subscriptionRepository.listSubscriptionsPaginated(filters);
   },
   confirmPaymentByProviderPaymentId: async (
     providerPaymentId: string,

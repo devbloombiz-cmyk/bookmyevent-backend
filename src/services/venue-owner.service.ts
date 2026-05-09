@@ -6,6 +6,7 @@ import { ApiError } from "../utils/api-error";
 import type { UserRole } from "../types/domain";
 import { hashPassword } from "../utils/password";
 import { subscriptionService } from "./subscription.service";
+import { subscriptionRepository } from "../repositories/subscription.repository";
 
 const defaultIncludedServiceItems = [
   "Hall Rental",
@@ -539,7 +540,24 @@ export const venueOwnerService = {
     await syncVenueOwnerUserStatus(venueOwner.toObject(), normalizedPayload);
     return venueOwnerRepository.findById(String(venueOwner._id));
   },
-  listVenueOwners: (filters: Record<string, unknown>) => venueOwnerRepository.findAll(filters),
+  listVenueOwners: async (filters: Record<string, unknown>) => {
+    const venueOwners = await venueOwnerRepository.findAll(filters);
+    const venueOwnerIds = venueOwners.map((item) => String(item._id));
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds(
+      "venue_owner",
+      venueOwnerIds,
+    );
+    const activeProIdSet = new Set(activeProRows.map((item) => String(item.actorId)));
+
+    return venueOwners.map((venueOwner) => {
+      const row = venueOwner.toObject() as Record<string, unknown>;
+      const isSubscribedPro = activeProIdSet.has(String(venueOwner._id));
+      return {
+        ...row,
+        isSubscribedPro,
+      };
+    });
+  },
   getMyVenueOwnerProfile: async (authUser: { id: string }) => {
     const venueOwnerByUserId = await venueOwnerRepository.findByUserId(authUser.id);
     if (venueOwnerByUserId) {
@@ -562,7 +580,13 @@ export const venueOwnerService = {
       });
     }
 
-    return venueOwner;
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("venue_owner", [String(venueOwner._id)]);
+    const isSubscribedPro = activeProRows.length > 0;
+
+    return {
+      ...(venueOwner.toObject() as Record<string, unknown>),
+      isSubscribedPro,
+    };
   },
   getVenueOwnerById: async (venueOwnerId: string, includeInactive = false) => {
     const venueOwner = await venueOwnerRepository.findById(venueOwnerId);
@@ -574,7 +598,13 @@ export const venueOwnerService = {
       throw new ApiError(404, "Venue owner not found");
     }
 
-    return venueOwner;
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("venue_owner", [venueOwnerId]);
+    const isSubscribedPro = activeProRows.length > 0;
+
+    return {
+      ...(venueOwner.toObject() as Record<string, unknown>),
+      isSubscribedPro,
+    };
   },
   updateVenueOwner: async (venueOwnerId: string, payload: Record<string, unknown>) => {
     const existingVenueOwner = await venueOwnerRepository.findById(venueOwnerId);

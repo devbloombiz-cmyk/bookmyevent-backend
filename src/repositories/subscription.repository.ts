@@ -64,6 +64,69 @@ export const subscriptionRepository = {
     const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(300, filters.limit)) : 120;
     return AccountSubscriptionModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
+  listSubscriptionsPaginated: async (filters: {
+    status?: string;
+    paymentStatus?: string;
+    actorType?: ActorType;
+    planCode?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const query: Record<string, unknown> = {};
+
+    if (filters.status) {
+      query.status = filters.status;
+    }
+
+    if (filters.paymentStatus) {
+      query.paymentStatus = filters.paymentStatus;
+    }
+
+    if (filters.actorType) {
+      query.actorType = filters.actorType;
+    }
+
+    if (filters.planCode) {
+      query.planCode = filters.planCode;
+    }
+
+    const limit =
+      typeof filters.limit === "number" && Number.isFinite(filters.limit)
+        ? Math.max(1, Math.min(300, Math.floor(filters.limit)))
+        : 25;
+    const page =
+      typeof filters.page === "number" && Number.isFinite(filters.page)
+        ? Math.max(1, Math.floor(filters.page))
+        : 1;
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      AccountSubscriptionModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      AccountSubscriptionModel.countDocuments(query),
+    ]);
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    };
+  },
+  findActiveProByActorIds: async (actorType: ActorType, actorIds: string[]) => {
+    if (!actorIds.length) {
+      return [];
+    }
+
+    return AccountSubscriptionModel.find({
+      actorType,
+      actorId: { $in: actorIds },
+      planCode: "PRO_YEARLY_4999",
+      status: "active",
+      paymentStatus: "confirmed",
+      $or: [{ endsAt: null }, { endsAt: { $gte: new Date() } }],
+    }).select({ actorId: 1 });
+  },
   updateSubscriptionById: (subscriptionId: string, payload: Record<string, unknown>, session?: ClientSession) =>
     AccountSubscriptionModel.findByIdAndUpdate(
       subscriptionId,

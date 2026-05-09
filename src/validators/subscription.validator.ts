@@ -66,6 +66,7 @@ export const adminListSubscriptionRequestsSchema = z.object({
     paymentStatus: z.enum(["pending", "confirmed", "failed"]).optional(),
     actorType: z.enum(["vendor", "venue_owner"]).optional(),
     planCode: z.enum(["FREE", "PRO_YEARLY_4999"]).optional(),
+    page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(300).optional(),
   }),
   params: z.object({}).default({}),

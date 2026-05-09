@@ -8,6 +8,7 @@ import { locationService } from "./location.service";
 import type { UserRole } from "../types/domain";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { subscriptionService } from "./subscription.service";
+import { subscriptionRepository } from "../repositories/subscription.repository";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const normalizeUrl = (value: unknown) => {
@@ -255,7 +256,23 @@ export const vendorService = {
 
     return vendor;
   },
-  listVendors: (filters: Record<string, unknown>) => vendorRepository.findAll(filters),
+  listVendors: async (filters: Record<string, unknown>) => {
+    const vendors = await vendorRepository.findAll(filters);
+    const vendorIds = vendors.map((item) => String(item._id));
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", vendorIds);
+    const activeProIdSet = new Set(activeProRows.map((item) => String(item.actorId)));
+
+    return vendors.map((vendor) => {
+      const row = vendor.toObject() as Record<string, unknown>;
+      const isSubscribedPro = activeProIdSet.has(String(vendor._id));
+      const isVerified = Boolean(row.isVerified) || isSubscribedPro;
+      return {
+        ...row,
+        isSubscribedPro,
+        isVerified,
+      };
+    });
+  },
   getVendorById: async (vendorId: string, includeInactive = false) => {
     const vendor = await vendorRepository.findById(vendorId);
     if (!vendor) {
@@ -266,7 +283,15 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
-    return vendor;
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", [vendorId]);
+    const isSubscribedPro = activeProRows.length > 0;
+    const row = vendor.toObject() as Record<string, unknown>;
+
+    return {
+      ...row,
+      isSubscribedPro,
+      isVerified: Boolean(row.isVerified) || isSubscribedPro,
+    };
   },
   getMyVendorProfile: async (authUser: Pick<AuthenticatedUser, "id">) => {
     const vendorByUserId = await vendorRepository.findByUserId(authUser.id);

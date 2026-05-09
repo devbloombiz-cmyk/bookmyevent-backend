@@ -82,7 +82,7 @@ export const subscriptionController = {
     return sendSuccess(res, "Subscription payment confirmed", { subscription });
   }),
   listSubscriptionsByAdmin: asyncHandler(async (req, res) => {
-    const subscriptions = await subscriptionService.listSubscriptionsForAdmin({
+    const paginationResult = await subscriptionService.listSubscriptionsForAdmin({
       status: req.query.status as
         | "inactive"
         | "pending_payment"
@@ -93,10 +93,27 @@ export const subscriptionController = {
       paymentStatus: req.query.paymentStatus as "pending" | "confirmed" | "failed" | undefined,
       actorType: req.query.actorType as "vendor" | "venue_owner" | undefined,
       planCode: req.query.planCode as "FREE" | "PRO_YEARLY_4999" | undefined,
-      limit: typeof req.query.limit === "number" ? req.query.limit : undefined,
+      page:
+        typeof req.query.page === "number"
+          ? req.query.page
+          : typeof req.query.page === "string" && req.query.page.trim()
+            ? Number(req.query.page)
+          : undefined,
+      limit:
+        typeof req.query.limit === "number"
+          ? req.query.limit
+          : typeof req.query.limit === "string" && req.query.limit.trim()
+            ? Number(req.query.limit)
+          : undefined,
     });
 
-    return sendSuccess(res, "Subscription requests fetched", { subscriptions });
+    return sendSuccess(res, "Subscription requests fetched", {
+      subscriptions: paginationResult.items,
+      page: paginationResult.page,
+      limit: paginationResult.limit,
+      total: paginationResult.total,
+      totalPages: paginationResult.totalPages,
+    });
   }),
   razorpayWebhook: asyncHandler(async (req, res) => {
     const rawBody = Buffer.isBuffer(req.body) ? req.body : null;

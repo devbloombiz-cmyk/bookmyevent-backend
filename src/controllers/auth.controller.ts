@@ -143,7 +143,7 @@ export const authController = {
       ip: req.ip,
       userAgent: req.headers["user-agent"],
     });
-    return sendSuccess(res, "OTP sent to email", result);
+    return sendSuccess(res, "OTP sent", result);
   }),
 
   verifyOtp: asyncHandler(async (req, res) => {

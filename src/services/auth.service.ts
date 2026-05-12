@@ -9,7 +9,7 @@ import { logger } from "../config/logger";
 import { otpSessionRepository } from "../repositories/otp-session.repository";
 import { refreshTokenRepository } from "../repositories/refresh-token.repository";
 import { userRepository } from "../repositories/user.repository";
-import { emailOtpService } from "./email-otp.service";
+import { otpNotificationService } from "./notifications/otp/otp-notification.service";
 import { hasPermission, resolveAccessProfileForUser } from "./pbac.service";
 import { durationToFutureDate } from "../utils/duration";
 
@@ -161,6 +161,8 @@ type OtpTarget = {
   identifier: string;
   otpLookupKey: string;
   loginMode: "email" | "mobile";
+  deliveryChannel: "email" | "whatsapp";
+  deliveryAddress: string;
   emailForDelivery?: string;
   email?: string;
   mobile?: string;
@@ -187,6 +189,11 @@ function resolveOtpPortal(value?: string): OtpPortal {
   }
 
   return "user";
+}
+
+function isEmailIdentifier(identifier: string) {
+  const normalized = identifier.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
 }
 
 function getPortalPermission(portal: OtpPortal): PermissionKey | null {
@@ -250,20 +257,30 @@ async function resolveOtpTarget(payload: {
     }
 
     const normalizedEmail = existingUser.email?.trim().toLowerCase() || "";
-    if (!normalizedEmail && !env.OTP_DEV_FALLBACK_ENABLED) {
-      throw new ApiError(
-        400,
-        "Selected portal account requires a registered email for OTP delivery.",
-      );
+    const normalizedMobile = existingUser.mobile?.trim() || "";
+    const wantsEmailOtp = isEmailIdentifier(identifier);
+
+    if (wantsEmailOtp && !normalizedEmail) {
+      throw new ApiError(400, "Selected portal account does not have a registered email.");
     }
+
+    if (!wantsEmailOtp && !normalizedMobile) {
+      throw new ApiError(400, "Selected portal account does not have a registered mobile number.");
+    }
+
+    const otpLookupKey = wantsEmailOtp ? normalizedEmail : `mobile:${normalizedMobile}`;
+    const deliveryChannel = wantsEmailOtp ? "email" : "whatsapp";
+    const deliveryAddress = wantsEmailOtp ? normalizedEmail : normalizedMobile;
 
     return {
       identifier,
-      otpLookupKey: normalizedEmail || `mobile:${existingUser.mobile || identifier}`,
-      loginMode: identifier.includes("@") ? "email" : "mobile",
-      emailForDelivery: normalizedEmail,
+      otpLookupKey,
+      loginMode: wantsEmailOtp ? "email" : "mobile",
+      deliveryChannel,
+      deliveryAddress,
+      emailForDelivery: wantsEmailOtp ? normalizedEmail : undefined,
       email: normalizedEmail,
-      mobile: existingUser.mobile ?? undefined,
+      mobile: normalizedMobile || undefined,
       authUser: {
         id: existingUser.id,
         name: existingUser.name,
@@ -275,34 +292,27 @@ async function resolveOtpTarget(payload: {
     } satisfies OtpTarget;
   }
 
-  const isEmailIdentifier = identifier.includes("@");
-  if (isEmailIdentifier) {
+  const identifierIsEmail = isEmailIdentifier(identifier);
+  if (identifierIsEmail) {
     const normalizedEmail = identifier.toLowerCase();
     return {
       identifier,
       otpLookupKey: normalizedEmail,
       loginMode: "email" as const,
+      deliveryChannel: "email" as const,
+      deliveryAddress: normalizedEmail,
       emailForDelivery: normalizedEmail,
       email: normalizedEmail,
     } satisfies OtpTarget;
   }
 
-  const user = await ensureCustomerFromMobile(identifier);
   const mobile = identifier.trim();
-  const deliveryEmail = user.email?.trim().toLowerCase();
-
-  if (!deliveryEmail && !env.OTP_DEV_FALLBACK_ENABLED) {
-    throw new ApiError(
-      400,
-      "Mobile login requires an email set in profile for OTP delivery. Use email login first and update profile.",
-    );
-  }
-
   return {
     identifier,
-    otpLookupKey: deliveryEmail || `mobile:${mobile}`,
+    otpLookupKey: `mobile:${mobile}`,
     loginMode: "mobile" as const,
-    emailForDelivery: deliveryEmail,
+    deliveryChannel: "whatsapp" as const,
+    deliveryAddress: mobile,
     mobile,
   } satisfies OtpTarget;
 }
@@ -432,13 +442,22 @@ async function requestLoginOtp(
   });
 
   try {
-    if (target.emailForDelivery) {
-      await emailOtpService.sendOtp({
-        toEmail: target.emailForDelivery,
-        otpCode,
-        expiryMinutes: env.OTP_EXPIRY_MINUTES,
-      });
-    }
+    const deliveryResult = await otpNotificationService.sendLoginOtp({
+      channel: target.deliveryChannel,
+      to: target.deliveryAddress,
+      otpCode,
+      expiryMinutes: env.OTP_EXPIRY_MINUTES,
+    });
+
+    logger.info(
+      {
+        event: "auth.otp.delivery.succeeded",
+        portal,
+        identifier: maskedIdentifier,
+        channel: deliveryResult.deliveryChannel,
+      },
+      "OTP delivery succeeded",
+    );
   } catch (error) {
     logger.warn(
       {
@@ -468,18 +487,23 @@ async function requestLoginOtp(
   return {
     identifier: target.identifier,
     email: target.emailForDelivery || "",
+    mobile: target.deliveryChannel === "whatsapp" ? target.deliveryAddress : "",
+    deliveryChannel: target.deliveryChannel,
     expiresAt,
     cooldownSeconds: env.OTP_REQUEST_COOLDOWN_SECONDS,
   };
 }
 
-async function verifyLoginOtp(payload: {
-  identifier?: string;
-  email?: string;
-  mobile?: string;
-  otp: string;
-  portal?: string;
-}, auditMeta?: OtpAuditMeta) {
+async function verifyLoginOtp(
+  payload: {
+    identifier?: string;
+    email?: string;
+    mobile?: string;
+    otp: string;
+    portal?: string;
+  },
+  auditMeta?: OtpAuditMeta,
+) {
   const portal = resolveOtpPortal(payload.portal);
   const maskedIdentifier = maskIdentifier(resolveLoginIdentifier(payload));
 

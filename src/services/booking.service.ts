@@ -4,6 +4,8 @@ import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
+import { bookingNotificationService } from "./notifications/booking/booking-notification.service";
+import { logger } from "../config/logger";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -18,12 +20,33 @@ const validBookingTransitions: Record<string, string[]> = {
 
 export const bookingService = {
   createBooking: async (payload: Record<string, unknown>, authUser: AuthUser) => {
+    let booking;
+
     if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForAuthUser(authUser);
-      return bookingRepository.create({ ...payload, vendorId });
+      booking = await bookingRepository.create({ ...payload, vendorId });
+    } else {
+      booking = await bookingRepository.create(payload);
     }
 
-    return bookingRepository.create(payload);
+    setImmediate(() => {
+      void bookingNotificationService.sendCustomerBookingConfirmation({
+        bookingId: String(booking.id),
+        customerId: String(booking.customerId),
+        vendorId: String(booking.vendorId),
+        packageId: String(booking.packageId),
+      });
+    });
+
+    logger.info(
+      {
+        event: "booking.notification.dispatch.queued",
+        bookingId: String(booking.id),
+      },
+      "Queued booking notification dispatch",
+    );
+
+    return booking;
   },
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
     if (authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)) {

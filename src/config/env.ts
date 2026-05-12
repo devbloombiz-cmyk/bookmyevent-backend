@@ -27,6 +27,18 @@ const envSchema = z
       .string()
       .optional()
       .transform((value) => value === "true"),
+    ULTRAMSG_BASE_URL: z.url().optional(),
+    ULTRAMSG_INSTANCE: z.string().min(1).optional(),
+    ULTRAMSG_TOKEN: z.string().min(1).optional(),
+    ULTRAMSG_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30000).default(8000),
+    ULTRAMSG_ENABLED: z
+      .string()
+      .optional()
+      .transform((value) => value !== "false"),
+    WHATSAPP_VENDOR_LEAD_NOTIFICATION_ENABLED: z
+      .string()
+      .optional()
+      .transform((value) => value !== "false"),
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
     AWS_REGION: z.string().optional(),
@@ -85,6 +97,13 @@ export const env = {
   FROM_EMAIL: parsedEnv.FROM_EMAIL ?? parsedEnv.SENDER_EMAIL,
   OTP_DEV_FALLBACK_ENABLED:
     parsedEnv.NODE_ENV !== "production" && Boolean(parsedEnv.OTP_DEV_FALLBACK_ENABLED),
+  ULTRAMSG_BASE_URL: parsedEnv.ULTRAMSG_BASE_URL ?? "https://api.ultramsg.com",
+  ULTRAMSG_ENABLED:
+    parsedEnv.ULTRAMSG_ENABLED !== undefined ? Boolean(parsedEnv.ULTRAMSG_ENABLED) : true,
+  WHATSAPP_VENDOR_LEAD_NOTIFICATION_ENABLED:
+    parsedEnv.WHATSAPP_VENDOR_LEAD_NOTIFICATION_ENABLED !== undefined
+      ? Boolean(parsedEnv.WHATSAPP_VENDOR_LEAD_NOTIFICATION_ENABLED)
+      : true,
   AUTH_COOKIE_SECURE:
     parsedEnv.AUTH_COOKIE_SECURE !== undefined
       ? Boolean(parsedEnv.AUTH_COOKIE_SECURE)

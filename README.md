@@ -22,6 +22,15 @@ Required OTP/Brevo variables:
 - `SENDER_NAME`
 - `OTP_EXPIRY_MINUTES`
 
+Optional WhatsApp (UltraMsg) variables:
+
+- `ULTRAMSG_ENABLED` (default `true`)
+- `ULTRAMSG_BASE_URL` (default `https://api.ultramsg.com`)
+- `ULTRAMSG_INSTANCE`
+- `ULTRAMSG_TOKEN`
+- `ULTRAMSG_TIMEOUT_MS` (default `8000`)
+- `WHATSAPP_VENDOR_LEAD_NOTIFICATION_ENABLED` (default `true`)
+
 3. Start dev server:
 
 ```bash

@@ -5,6 +5,8 @@ import { ApiError } from "../utils/api-error";
 import { bookingRepository } from "../repositories/booking.repository";
 import { availabilityRepository } from "../repositories/availability.repository";
 import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
+import { leadNotificationService } from "./notifications/lead/lead-notification.service";
+import { logger } from "../config/logger";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -47,7 +49,29 @@ export const leadService = {
       throw new ApiError(400, "customerId is required");
     }
 
-    return leadRepository.create({ ...payload, vendorId, customerId });
+    const lead = await leadRepository.create({ ...payload, vendorId, customerId });
+
+    setImmediate(() => {
+      void leadNotificationService.sendVendorLeadCreatedWhatsapp({
+        leadId: String(lead.id),
+        vendorId: String(lead.vendorId),
+        customerId: String(lead.customerId),
+        eventDate: new Date(lead.eventDate),
+        eventSlot: String(lead.eventSlot || "Full Day"),
+        location: String(lead.location || ""),
+      });
+    });
+
+    logger.info(
+      {
+        event: "lead.notification.dispatch.queued",
+        leadId: String(lead.id),
+        vendorId: String(lead.vendorId),
+      },
+      "Queued vendor lead notification dispatch",
+    );
+
+    return lead;
   },
   listLeads: async (authUser: AuthUser, filters: Record<string, unknown>) => {
     const requestedStatus = typeof filters.status === "string" ? filters.status : undefined;

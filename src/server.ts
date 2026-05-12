@@ -37,6 +37,8 @@ async function bootstrap() {
     if (adminSeedResult.status === "skipped") {
       if (adminSeedResult.reason === "disabled") {
         logger.info("Super admin bootstrap skipped (SEED_ADMIN_ENABLED=false)");
+      } else if (adminSeedResult.reason === "already-exists") {
+        logger.info("Super admin bootstrap skipped (already provisioned)");
       } else {
         logger.warn(
           "Super admin bootstrap skipped: set SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, SEED_ADMIN_NAME and SEED_ADMIN_MOBILE",

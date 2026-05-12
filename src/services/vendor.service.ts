@@ -39,6 +39,7 @@ const textFields = [
   "travelCost",
   "deliveryTime",
   "coverImage",
+  "profileType",
 ] as const;
 
 const buildNormalizedVendorPayload = (
@@ -232,6 +233,7 @@ export const vendorService = {
     options?: { requestedByRole?: UserRole },
   ) => {
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: false });
+    normalizedPayload.profileType = "vendor";
 
     // New vendors are always onboarded before subscription. Persist only cover image at this stage.
     normalizedPayload.portfolioImages = [];
@@ -296,6 +298,10 @@ export const vendorService = {
   getVendorById: async (vendorId: string, includeInactive = false) => {
     const vendor = await vendorRepository.findById(vendorId);
     if (!vendor) {
+      throw new ApiError(404, "Vendor not found");
+    }
+
+    if (vendor.profileType === "venue_owner_shadow") {
       throw new ApiError(404, "Vendor not found");
     }
 
@@ -442,6 +448,7 @@ export const vendorService = {
   },
   updateVendor: async (vendorId: string, payload: Record<string, unknown>) => {
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
+    normalizedPayload.profileType = "vendor";
 
     const existingVendor = await vendorRepository.findById(vendorId);
     if (!existingVendor) {

@@ -30,6 +30,11 @@ const vendorSchema = new Schema(
     paymentTerms: { type: String, default: "", trim: true },
     travelCost: { type: String, default: "", trim: true },
     deliveryTime: { type: String, default: "", trim: true },
+    profileType: {
+      type: String,
+      enum: ["vendor", "venue_owner_shadow"],
+      default: "vendor",
+    },
     pricingModel: {
       type: String,
       enum: ["base_package", "per_day", "per_plate"],
@@ -60,6 +65,7 @@ vendorSchema.index({ isVerified: 1 });
 vendorSchema.index({ approvalStatus: 1, isActive: 1 });
 vendorSchema.index({ mobile: 1 });
 vendorSchema.index({ email: 1 });
+vendorSchema.index({ profileType: 1 });
 vendorSchema.index({ category: 1, subCategory: 1, pricingModel: 1 });
 
 export const VendorModel = model("Vendor", vendorSchema);

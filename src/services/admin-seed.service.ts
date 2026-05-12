@@ -17,7 +17,7 @@ type BootstrapSuperAdminResult =
     }
   | {
       status: "skipped";
-      reason: "disabled" | "missing-config";
+      reason: "disabled" | "missing-config" | "already-exists";
     };
 
 const defaultSeedConfig = {
@@ -91,6 +91,13 @@ export async function bootstrapSuperAdmin(
   }
 
   const targetUser = existingByEmail ?? existingByMobile;
+
+  if (targetUser?.role === "super_admin") {
+    return {
+      status: "skipped",
+      reason: "already-exists",
+    };
+  }
 
   const adminUser = targetUser
     ? await userRepository.updateById(String(targetUser._id), {

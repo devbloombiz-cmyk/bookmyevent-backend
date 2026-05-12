@@ -75,6 +75,7 @@ export async function resolveVendorIdForVenueOwnerAuthUser(authUser: Pick<Authen
   }
 
   const createdVendor = await vendorRepository.create({
+    profileType: "venue_owner_shadow",
     userId: authUser.id,
     businessName: venueOwner.businessName,
     ownerName: venueOwner.ownerName,

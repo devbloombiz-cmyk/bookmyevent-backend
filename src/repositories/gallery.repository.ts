@@ -28,4 +28,6 @@ export const galleryRepository = {
   updateById: (galleryId: string, payload: Record<string, unknown>) =>
     GalleryModel.findByIdAndUpdate(galleryId, payload, { returnDocument: "after" }),
   deleteById: (galleryId: string) => GalleryModel.findByIdAndDelete(galleryId),
+  deleteManyByVendorAndMediaType: (vendorId: string, mediaType: "image" | "video") =>
+    GalleryModel.deleteMany({ vendorId, sourceType: "vendor", mediaType }),
 };

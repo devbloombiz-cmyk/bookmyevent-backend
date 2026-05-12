@@ -38,6 +38,7 @@ const textFields = [
   "paymentTerms",
   "travelCost",
   "deliveryTime",
+  "coverImage",
 ] as const;
 
 const buildNormalizedVendorPayload = (
@@ -93,6 +94,16 @@ const buildNormalizedVendorPayload = (
           .map((item) => item.trim())
           .filter(Boolean)
       : [];
+
+    const normalizedPortfolioImages = Array.isArray(normalized.portfolioImages)
+      ? normalized.portfolioImages.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        )
+      : [];
+
+    if (!normalizeText(normalized.coverImage) && normalizedPortfolioImages.length > 0) {
+      normalized.coverImage = normalizedPortfolioImages[0];
+    }
   }
 
   if (!options.partial || "videoLinks" in payload) {
@@ -210,12 +221,21 @@ const syncVendorUserStatus = async (
   });
 };
 
+const hasActiveProSubscription = async (vendorId: string) => {
+  const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", [vendorId]);
+  return activeProRows.length > 0;
+};
+
 export const vendorService = {
   createVendor: async (
     payload: Record<string, unknown>,
     options?: { requestedByRole?: UserRole },
   ) => {
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: false });
+
+    // New vendors are always onboarded before subscription. Persist only cover image at this stage.
+    normalizedPayload.portfolioImages = [];
+    normalizedPayload.videoLinks = [];
 
     const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
     const isPrivilegedCreator = options?.requestedByRole
@@ -245,7 +265,7 @@ export const vendorService = {
       ? normalizedPayload.portfolioImages.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       : [];
 
-    await galleryService.createVendorPortfolioGalleryItems({
+    await galleryService.syncVendorPortfolioGalleryItems({
       vendorId: String(vendor._id),
       vendorName: String(vendor.businessName ?? "Vendor"),
       category: String(vendor.category ?? "general"),
@@ -348,6 +368,19 @@ export const vendorService = {
         throw new ApiError(404, "Vendor not found");
       }
 
+      if (Array.isArray(normalizedPayload.portfolioImages)) {
+        await galleryService.syncVendorPortfolioGalleryItems({
+          vendorId: String(updatedVendor._id),
+          vendorName: String(updatedVendor.businessName ?? "Vendor"),
+          category: String(updatedVendor.category ?? "general"),
+          subCategory: String(updatedVendor.subCategory ?? ""),
+          city: String(updatedVendor.city ?? ""),
+          mediaUrls: normalizedPayload.portfolioImages.filter(
+            (item): item is string => typeof item === "string" && item.trim().length > 0,
+          ),
+        });
+      }
+
       return updatedVendor;
     }
 
@@ -392,6 +425,19 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
+    if (Array.isArray(normalizedPayload.portfolioImages)) {
+      await galleryService.syncVendorPortfolioGalleryItems({
+        vendorId: String(updatedVendor._id),
+        vendorName: String(updatedVendor.businessName ?? "Vendor"),
+        category: String(updatedVendor.category ?? "general"),
+        subCategory: String(updatedVendor.subCategory ?? ""),
+        city: String(updatedVendor.city ?? ""),
+        mediaUrls: normalizedPayload.portfolioImages.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        ),
+      });
+    }
+
     return updatedVendor;
   },
   updateVendor: async (vendorId: string, payload: Record<string, unknown>) => {
@@ -411,14 +457,46 @@ export const vendorService = {
       normalizedPayload.userId = linkedUser._id;
     }
 
-    const vendor = await vendorRepository.updateById(vendorId, normalizedPayload);
-    if (!vendor) {
+    const allowExtendedMedia = await hasActiveProSubscription(vendorId);
+    if (!allowExtendedMedia) {
+      if ("portfolioImages" in normalizedPayload) {
+        normalizedPayload.portfolioImages = [];
+      }
+      if ("videoLinks" in normalizedPayload) {
+        normalizedPayload.videoLinks = [];
+      }
+    }
+
+    const persistedVendor = await vendorRepository.updateById(vendorId, normalizedPayload);
+    if (!persistedVendor) {
       throw new ApiError(404, "Vendor not found");
+    }
+
+    if (Array.isArray(normalizedPayload.portfolioImages) && normalizedPayload.portfolioImages.length > 0) {
+      await galleryService.syncVendorPortfolioGalleryItems({
+        vendorId: String(persistedVendor._id),
+        vendorName: String(persistedVendor.businessName ?? "Vendor"),
+        category: String(persistedVendor.category ?? "general"),
+        subCategory: String(persistedVendor.subCategory ?? ""),
+        city: String(persistedVendor.city ?? ""),
+        mediaUrls: normalizedPayload.portfolioImages.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        ),
+      });
+    } else if ("portfolioImages" in normalizedPayload) {
+      await galleryService.syncVendorPortfolioGalleryItems({
+        vendorId: String(persistedVendor._id),
+        vendorName: String(persistedVendor.businessName ?? "Vendor"),
+        category: String(persistedVendor.category ?? "general"),
+        subCategory: String(persistedVendor.subCategory ?? ""),
+        city: String(persistedVendor.city ?? ""),
+        mediaUrls: [],
+      });
     }
 
     await syncVendorUserStatus(existingVendor.toObject(), normalizedPayload);
 
-    return vendor;
+    return persistedVendor;
   },
   deleteVendor: async (vendorId: string) => {
     const vendor = await vendorRepository.deleteById(vendorId);

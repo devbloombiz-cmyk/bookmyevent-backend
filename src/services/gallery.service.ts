@@ -129,4 +129,20 @@ export const galleryService = {
 
     return galleryRepository.createMany(galleryRows);
   },
+  syncVendorPortfolioGalleryItems: async (payload: {
+    vendorId: string;
+    vendorName: string;
+    category: string;
+    subCategory: string;
+    city: string;
+    mediaUrls: string[];
+  }) => {
+    await galleryRepository.deleteManyByVendorAndMediaType(payload.vendorId, "image");
+
+    if (!payload.mediaUrls.length) {
+      return [];
+    }
+
+    return galleryService.createVendorPortfolioGalleryItems(payload);
+  },
 };

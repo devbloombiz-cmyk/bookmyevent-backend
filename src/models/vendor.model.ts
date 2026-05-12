@@ -41,6 +41,7 @@ const vendorSchema = new Schema(
       enum: ["pending", "active", "disabled"],
       default: "active",
     },
+    coverImage: { type: String, default: "", trim: true },
     portfolioImages: { type: [String], default: [] },
     rating: { type: Number, default: 0, min: 0, max: 5 },
     reviewCount: { type: Number, default: 0, min: 0 },

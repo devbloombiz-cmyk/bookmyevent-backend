@@ -37,6 +37,7 @@ export const vendorCreateSchema = z.object({
     pricingModel: z.enum(["base_package", "per_day", "per_plate"]).optional().default("base_package"),
     pricingAmount: z.number().min(0).optional().default(0),
     approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("active"),
+    coverImage: z.union([z.url(), z.literal("")]).optional().default(""),
     portfolioImages: z.array(z.url()).default([]),
     isVerified: z.boolean().optional().default(false),
     isActive: z.boolean().optional().default(true),
@@ -70,6 +71,7 @@ export const vendorUpdateSchema = z.object({
       pricingModel: z.enum(["base_package", "per_day", "per_plate"]).optional(),
       pricingAmount: z.number().min(0).optional(),
       approvalStatus: z.enum(["pending", "active", "disabled"]).optional(),
+      coverImage: z.union([z.url(), z.literal("")]).optional(),
       portfolioImages: z.array(z.url()).optional(),
       isVerified: z.boolean().optional(),
       isActive: z.boolean().optional(),
@@ -113,6 +115,7 @@ export const vendorSelfUpdateSchema = z.object({
       deliveryTime: z.string().optional(),
       pricingModel: z.enum(["base_package", "per_day", "per_plate"]).optional(),
       pricingAmount: z.number().min(0).optional(),
+      coverImage: z.union([z.url(), z.literal("")]).optional(),
       portfolioImages: z.array(z.url()).optional(),
     })
     .refine((payload) => Object.keys(payload).length > 0, "At least one field is required"),

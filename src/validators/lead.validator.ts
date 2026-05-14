@@ -1,11 +1,15 @@
 import { z } from "zod";
-import { LEAD_STATUSES, PAYMENT_STATUSES } from "../types/domain";
+import { LEAD_SOURCES, LEAD_STATUSES, PAYMENT_STATUSES } from "../types/domain";
 
 export const createLeadSchema = z.object({
   body: z.object({
     customerId: z.string().min(24).max(24).optional(),
-    vendorId: z.string().min(24).max(24),
+    vendorId: z.string().min(24).max(24).optional(),
     venueOwnerId: z.string().min(24).max(24).optional(),
+    source: z.enum(LEAD_SOURCES).optional().default("WEBSITE"),
+    customerName: z.string().max(120).optional().default(""),
+    customerMobile: z.string().max(20).optional().default(""),
+    customerEmail: z.string().email().optional().or(z.literal("")),
     venuePackageName: z.string().max(120).optional().default(""),
     eventDate: z.coerce.date(),
     eventSlot: z.string().optional().default("Full Day"),
@@ -55,6 +59,48 @@ export const convertLeadToBookingSchema = z.object({
     packageId: z.string().min(24).max(24),
     amount: z.number().nonnegative(),
     advancePaid: z.number().nonnegative().default(0),
+  }),
+  query: z.object({}),
+  params: z.object({
+    leadId: z.string().min(1),
+  }),
+});
+
+export const createOfferForLeadSchema = z.object({
+  body: z.object({
+    packageId: z.string().min(24).max(24),
+    packageName: z.string().max(120).optional(),
+    finalAmount: z.number().positive(),
+    advanceAmount: z.number().positive(),
+    notes: z.string().optional(),
+    paymentExpiry: z.string().optional(),
+    sendWhatsApp: z.boolean().optional().default(false),
+  }),
+  query: z.object({}),
+  params: z.object({
+    leadId: z.string().min(1),
+  }),
+});
+
+export const sendOfferPaymentLinkSchema = z.object({
+  body: z.object({
+    notes: z.string().optional(),
+  }),
+  query: z.object({}),
+  params: z.object({
+    leadId: z.string().min(1),
+    paymentRequestId: z.string().min(1),
+  }),
+});
+
+export const recordManualAdvancePaymentSchema = z.object({
+  body: z.object({
+    packageId: z.string().min(24).max(24),
+    packageName: z.string().max(120).optional(),
+    finalAmount: z.number().positive(),
+    paidAmount: z.number().positive(),
+    notes: z.string().optional(),
+    markBooked: z.boolean().optional().default(false),
   }),
   query: z.object({}),
   params: z.object({

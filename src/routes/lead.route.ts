@@ -6,8 +6,11 @@ import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   convertLeadToBookingSchema,
+  createOfferForLeadSchema,
   createLeadSchema,
   listLeadSchema,
+  recordManualAdvancePaymentSchema,
+  sendOfferPaymentLinkSchema,
   updateLeadSchema,
 } from "../validators/lead.validator";
 
@@ -35,6 +38,27 @@ leadRouter.post(
   authorize([PermissionKeys.LeadConvertOwnVendor, PermissionKeys.LeadConvertAny]),
   validateRequest(convertLeadToBookingSchema),
   leadController.convertLeadToBooking,
+);
+leadRouter.post(
+  "/:leadId/offers",
+  requireAuth,
+  authorize([PermissionKeys.LeadUpdateOwnVendor, PermissionKeys.LeadUpdateAny]),
+  validateRequest(createOfferForLeadSchema),
+  leadController.createOfferForLead,
+);
+leadRouter.post(
+  "/:leadId/offers/:paymentRequestId/send",
+  requireAuth,
+  authorize([PermissionKeys.LeadUpdateOwnVendor, PermissionKeys.LeadUpdateAny]),
+  validateRequest(sendOfferPaymentLinkSchema),
+  leadController.sendOfferPaymentLinkToCustomer,
+);
+leadRouter.post(
+  "/:leadId/manual-advance-payment",
+  requireAuth,
+  authorize([PermissionKeys.LeadUpdateOwnVendor, PermissionKeys.LeadUpdateAny]),
+  validateRequest(recordManualAdvancePaymentSchema),
+  leadController.recordManualAdvancePayment,
 );
 
 export { leadRouter };

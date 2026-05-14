@@ -8,7 +8,11 @@ type ActorType = "vendor" | "venue_owner";
 export const subscriptionRepository = {
   upsertPlanByCode: (code: string, payload: Record<string, unknown>) =>
     SubscriptionPlanModel.findOneAndUpdate({ code }, { $set: payload }, { upsert: true, returnDocument: "after" }),
+  createPlan: (payload: Record<string, unknown>) => SubscriptionPlanModel.create(payload),
   getPlanByCode: (code: string) => SubscriptionPlanModel.findOne({ code }),
+  listAllPlans: () => SubscriptionPlanModel.find({}).sort({ createdAt: -1 }),
+  updatePlanByCode: (code: string, payload: Record<string, unknown>) =>
+    SubscriptionPlanModel.findOneAndUpdate({ code }, { $set: payload }, { returnDocument: "after" }),
   listActivePlansByActorType: (actorType: ActorType) =>
     SubscriptionPlanModel.find({ isActive: true, actorTypes: actorType }).sort({ priceInr: 1 }),
   createAccountSubscription: async (payload: Record<string, unknown>, session?: ClientSession) => {
@@ -121,7 +125,7 @@ export const subscriptionRepository = {
     return AccountSubscriptionModel.find({
       actorType,
       actorId: { $in: actorIds },
-      planCode: "PRO_YEARLY_4999",
+      planCode: { $ne: "FREE" },
       status: "active",
       paymentStatus: "confirmed",
       $or: [{ endsAt: null }, { endsAt: { $gte: new Date() } }],

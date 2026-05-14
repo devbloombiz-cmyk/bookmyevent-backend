@@ -7,21 +7,26 @@ import { availabilityRepository } from "../repositories/availability.repository"
 import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
 import { leadNotificationService } from "./notifications/lead/lead-notification.service";
 import { logger } from "../config/logger";
+import { paymentRequestService } from "./payment-request.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
 };
 
 const validLeadTransitions: Record<string, string[]> = {
-  NEW: ["CONTACTED", "CANCELLED"],
-  CONTACTED: ["NEGOTIATION", "CANCELLED"],
-  NEGOTIATION: ["QUOTE_SENT", "CANCELLED"],
-  QUOTE_SENT: ["PAYMENT_PENDING", "CANCELLED"],
-  PAYMENT_PENDING: ["PAID", "CANCELLED"],
-  PAID: ["CONFIRMED", "CANCELLED"],
+  NEW: ["CONTACTED", "LOST", "CANCELLED"],
+  CONTACTED: ["PAYMENT_DONE", "BOOKED", "LOST", "CANCELLED"],
+  PAYMENT_DONE: ["BOOKED", "LOST", "CANCELLED"],
+  BOOKED: ["COMPLETED", "CANCELLED"],
+  LOST: [],
+  CANCELLED: [],
+  // Legacy transitions retained for historical records.
+  NEGOTIATION: ["QUOTE_SENT", "PAYMENT_DONE", "BOOKED", "LOST", "CANCELLED"],
+  QUOTE_SENT: ["PAYMENT_PENDING", "PAYMENT_DONE", "BOOKED", "LOST", "CANCELLED"],
+  PAYMENT_PENDING: ["PAID", "PAYMENT_DONE", "BOOKED", "LOST", "CANCELLED"],
+  PAID: ["CONFIRMED", "PAYMENT_DONE", "BOOKED", "CANCELLED"],
   CONFIRMED: ["COMPLETED", "CANCELLED"],
   COMPLETED: [],
-  CANCELLED: [],
 };
 
 async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: string) {
@@ -45,22 +50,25 @@ export const leadService = {
     const customerId = authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)
       ? authUser.id
       : String(payload.customerId ?? "");
-    if (!customerId) {
-      throw new ApiError(400, "customerId is required");
-    }
 
-    const lead = await leadRepository.create({ ...payload, vendorId, customerId });
-
-    setImmediate(() => {
-      void leadNotificationService.sendVendorLeadCreatedWhatsapp({
-        leadId: String(lead.id),
-        vendorId: String(lead.vendorId),
-        customerId: String(lead.customerId),
-        eventDate: new Date(lead.eventDate),
-        eventSlot: String(lead.eventSlot || "Full Day"),
-        location: String(lead.location || ""),
-      });
+    const lead = await leadRepository.create({
+      ...payload,
+      vendorId,
+      customerId: customerId || null,
     });
+
+    if (lead.customerId) {
+      setImmediate(() => {
+        void leadNotificationService.sendVendorLeadCreatedWhatsapp({
+          leadId: String(lead.id),
+          vendorId: String(lead.vendorId),
+          customerId: String(lead.customerId),
+          eventDate: new Date(lead.eventDate),
+          eventSlot: String(lead.eventSlot || "Full Day"),
+          location: String(lead.location || ""),
+        });
+      });
+    }
 
     logger.info(
       {
@@ -112,6 +120,10 @@ export const leadService = {
       if (!allowed.includes(payload.status)) {
         throw new ApiError(400, `Invalid status transition from ${currentStatus} to ${payload.status}`);
       }
+
+      if (payload.status === "BOOKED") {
+        await paymentRequestService.finalizeLeadAsBooked(leadId, authUser);
+      }
     }
 
     const lead = await leadRepository.updateById(leadId, payload);
@@ -147,7 +159,10 @@ export const leadService = {
     }
 
     const booking = await bookingRepository.create({
-      customerId: lead.customerId,
+      customerId: lead.customerId ?? null,
+      customerName: String(lead.customerName || "").trim(),
+      customerMobile: String(lead.customerMobile || "").trim(),
+      customerEmail: String(lead.customerEmail || "").trim(),
       vendorId: lead.vendorId,
       leadId: lead._id,
       packageId: payload.packageId,
@@ -156,10 +171,16 @@ export const leadService = {
       amount: payload.amount,
       advancePaid: payload.advancePaid ?? 0,
       paymentStatus: payload.advancePaid && payload.advancePaid > 0 ? "paid" : "pending",
-      bookingStatus: "confirmed",
+      paidAmount: payload.advancePaid ?? 0,
+      dueAmount: Math.max(0, payload.amount - (payload.advancePaid ?? 0)),
+      bookingStatus: "upcoming",
+      vendorAmount: payload.amount,
+      settledAmount: 0,
+      pendingSettlement: payload.amount,
+      settlementStatus: "PENDING",
     });
 
-    await leadRepository.updateById(leadId, { status: "CONFIRMED", paymentStatus: "paid" });
+    await leadRepository.updateById(leadId, { status: "BOOKED", paymentStatus: "paid" });
 
     if (lead.eventDate && lead.eventSlot) {
       await availabilityRepository.upsertSlot({
@@ -171,5 +192,42 @@ export const leadService = {
     }
 
     return booking;
+  },
+  createOfferForLead: async (
+    leadId: string,
+    payload: {
+      packageId: string;
+      packageName?: string;
+      finalAmount: number;
+      advanceAmount: number;
+      notes?: string;
+      paymentExpiry?: string;
+      sendWhatsApp?: boolean;
+    },
+    authUser: AuthUser,
+  ) => {
+    return paymentRequestService.createOfferForLead(leadId, payload, authUser);
+  },
+  sendOfferPaymentLinkToCustomer: async (
+    leadId: string,
+    paymentRequestId: string,
+    payload: { notes?: string },
+    authUser: AuthUser,
+  ) => {
+    return paymentRequestService.sendOfferPaymentLinkToCustomer(leadId, paymentRequestId, payload, authUser);
+  },
+  recordManualAdvancePaymentForLead: async (
+    leadId: string,
+    payload: {
+      packageId: string;
+      packageName?: string;
+      finalAmount: number;
+      paidAmount: number;
+      notes?: string;
+      markBooked?: boolean;
+    },
+    authUser: AuthUser,
+  ) => {
+    return paymentRequestService.recordManualAdvancePaymentForLead(leadId, payload, authUser);
   },
 };

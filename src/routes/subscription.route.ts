@@ -5,8 +5,11 @@ import { authorize } from "../middlewares/authorize.middleware";
 import { PermissionKeys } from "../config/permissions";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
+  adminCreateSubscriptionPlanSchema,
+  adminListSubscriptionPlansSchema,
   adminListSubscriptionRequestsSchema,
   adminConfirmSubscriptionPaymentSchema,
+  adminUpdateSubscriptionPlanSchema,
   confirmMyRazorpayPaymentSchema,
   createSubscriptionCheckoutIntentSchema,
   getMySubscriptionSchema,
@@ -53,6 +56,30 @@ subscriptionRouter.post(
   authorize(PermissionKeys.VendorUpdateAny),
   validateRequest(adminConfirmSubscriptionPaymentSchema),
   subscriptionController.confirmPaymentByAdmin,
+);
+
+subscriptionRouter.get(
+  "/admin/plans",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemCreate),
+  validateRequest(adminListSubscriptionPlansSchema),
+  subscriptionController.listPlansByAdmin,
+);
+
+subscriptionRouter.post(
+  "/admin/plans",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemCreate),
+  validateRequest(adminCreateSubscriptionPlanSchema),
+  subscriptionController.createPlanByAdmin,
+);
+
+subscriptionRouter.patch(
+  "/admin/plans/:code",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemCreate),
+  validateRequest(adminUpdateSubscriptionPlanSchema),
+  subscriptionController.updatePlanByAdmin,
 );
 
 subscriptionRouter.get(

@@ -160,6 +160,8 @@ export const DefaultRolePermissionKeys: Record<string, PermissionKey[]> = {
     PermissionKeys.WorkspaceVenueOwnerAccess,
     PermissionKeys.AvailabilityReadOwn,
     PermissionKeys.AvailabilityWriteOwn,
+    PermissionKeys.BookingReadOwnVendor,
+    PermissionKeys.BookingUpdateOwnVendor,
     PermissionKeys.LeadReadOwnVendor,
     PermissionKeys.LeadUpdateOwnVendor,
     PermissionKeys.LeadConvertOwnVendor,

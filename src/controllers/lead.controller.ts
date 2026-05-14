@@ -41,4 +41,40 @@ export const leadController = {
     const booking = await leadService.convertLeadToBooking(leadId, req.body, authUser);
     return sendSuccess(res, "Lead converted to booking", { booking });
   }),
+  createOfferForLead: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { paymentRequest: null }, 401);
+    }
+
+    const leadId = String(req.params.leadId);
+    const paymentRequest = await leadService.createOfferForLead(leadId, req.body, authUser);
+    return sendSuccess(res, "Offer created", { paymentRequest }, 201);
+  }),
+  sendOfferPaymentLinkToCustomer: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { paymentRequest: null }, 401);
+    }
+
+    const leadId = String(req.params.leadId);
+    const paymentRequestId = String(req.params.paymentRequestId);
+    const paymentRequest = await leadService.sendOfferPaymentLinkToCustomer(
+      leadId,
+      paymentRequestId,
+      req.body,
+      authUser,
+    );
+    return sendSuccess(res, "Payment link sent to customer", { paymentRequest });
+  }),
+  recordManualAdvancePayment: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { paymentRequest: null, booking: null }, 401);
+    }
+
+    const leadId = String(req.params.leadId);
+    const result = await leadService.recordManualAdvancePaymentForLead(leadId, req.body, authUser);
+    return sendSuccess(res, "Manual payment recorded", result, 201);
+  }),
 };

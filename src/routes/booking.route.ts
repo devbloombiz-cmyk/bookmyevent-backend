@@ -5,6 +5,8 @@ import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
+  bookingBalanceRequestSchema,
+  bookingBalanceSendSchema,
   bookingCreateSchema,
   bookingListSchema,
   bookingUpdateSchema,
@@ -30,6 +32,20 @@ bookingRouter.put(
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingUpdateSchema),
   bookingController.updateBooking,
+);
+bookingRouter.post(
+  "/:bookingId/request-balance",
+  requireAuth,
+  authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
+  validateRequest(bookingBalanceRequestSchema),
+  bookingController.requestBalancePayment,
+);
+bookingRouter.post(
+  "/:bookingId/payment-requests/:paymentRequestId/send",
+  requireAuth,
+  authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
+  validateRequest(bookingBalanceSendSchema),
+  bookingController.sendBalancePaymentLink,
 );
 
 export { bookingRouter };

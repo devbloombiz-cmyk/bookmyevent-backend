@@ -12,7 +12,7 @@ import Razorpay from "razorpay";
 import mongoose from "mongoose";
 
 type ActorType = "vendor" | "venue_owner";
-type PlanCode = "FREE" | "PRO_YEARLY_4999";
+type PlanCode = string;
 
 type SubscriptionLimits = {
   maxPortfolioImages: number;
@@ -27,7 +27,7 @@ type UsageSnapshot = {
 };
 
 const FREE_PLAN_CODE: PlanCode = "FREE";
-const PRO_PLAN_CODE: PlanCode = "PRO_YEARLY_4999";
+const DEFAULT_PRO_PLAN_CODE: PlanCode = "PRO_YEARLY_4999";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -105,8 +105,13 @@ const parseActorType = (authUser: Pick<AuthenticatedUser, "role">): ActorType =>
 };
 
 const ensureBasePlans = async () => {
-  await Promise.all([
-    subscriptionRepository.upsertPlanByCode(FREE_PLAN_CODE, {
+  const [freePlan, defaultProPlan] = await Promise.all([
+    subscriptionRepository.getPlanByCode(FREE_PLAN_CODE),
+    subscriptionRepository.getPlanByCode(DEFAULT_PRO_PLAN_CODE),
+  ]);
+
+  if (!freePlan) {
+    await subscriptionRepository.createPlan({
       code: FREE_PLAN_CODE,
       name: "Free",
       description: "Default plan with baseline limits",
@@ -115,9 +120,12 @@ const ensureBasePlans = async () => {
       billingCycle: "yearly",
       limits: defaultFreeLimits,
       isActive: true,
-    }),
-    subscriptionRepository.upsertPlanByCode(PRO_PLAN_CODE, {
-      code: PRO_PLAN_CODE,
+    });
+  }
+
+  if (!defaultProPlan) {
+    await subscriptionRepository.createPlan({
+      code: DEFAULT_PRO_PLAN_CODE,
       name: "Pro Yearly",
       description: "Yearly subscription with expanded limits",
       actorTypes: ["vendor", "venue_owner"],
@@ -125,9 +133,11 @@ const ensureBasePlans = async () => {
       billingCycle: "yearly",
       limits: defaultProLimits,
       isActive: true,
-    }),
-  ]);
+    });
+  }
 };
+
+const normalizePlanCode = (value: string) => value.trim().toUpperCase();
 
 const resolveActor = async (authUser: Pick<AuthenticatedUser, "id" | "role">) => {
   const actorType = parseActorType(authUser);
@@ -316,20 +326,135 @@ export const subscriptionService = {
     const actorType = parseActorType(authUser);
     return subscriptionRepository.listActivePlansByActorType(actorType);
   },
+  listPlansForAdmin: async () => {
+    await ensureBasePlans();
+    return subscriptionRepository.listAllPlans();
+  },
+  createPlanByAdmin: async (
+    payload: {
+      code: string;
+      actorTypes?: ActorType[];
+      name: string;
+      description?: string;
+      priceInr: number;
+      billingCycle: "yearly" | "monthly" | "one_time";
+      limits: SubscriptionLimits;
+      isActive?: boolean;
+    },
+    adminUserId: string,
+  ) => {
+    await ensureBasePlans();
+    const code = normalizePlanCode(payload.code);
+    if (!code || code === FREE_PLAN_CODE) {
+      throw new ApiError(400, "Plan code is invalid");
+    }
+
+    const existing = await subscriptionRepository.getPlanByCode(code);
+    if (existing) {
+      throw new ApiError(409, "Subscription plan code already exists");
+    }
+
+    const actorTypes = payload.actorTypes?.length
+      ? payload.actorTypes
+      : (["vendor", "venue_owner"] as ActorType[]);
+
+    const created = await subscriptionRepository.createPlan({
+      code,
+      actorTypes,
+      name: payload.name.trim(),
+      description: (payload.description || "").trim(),
+      priceInr: Math.max(0, Math.round(payload.priceInr || 0)),
+      billingCycle: payload.billingCycle,
+      limits: {
+        maxPortfolioImages: Math.floor(payload.limits.maxPortfolioImages),
+        maxVideoLinks: Math.floor(payload.limits.maxVideoLinks),
+        maxPackages: Math.floor(payload.limits.maxPackages),
+      },
+      isActive: payload.isActive !== false,
+      createdBy: adminUserId,
+      updatedBy: adminUserId,
+    });
+
+    return created;
+  },
+  updatePlanByAdmin: async (
+    code: string,
+    payload: {
+      actorTypes?: ActorType[];
+      name?: string;
+      description?: string;
+      priceInr?: number;
+      billingCycle?: "yearly" | "monthly" | "one_time";
+      limits?: Partial<SubscriptionLimits>;
+      isActive?: boolean;
+    },
+    adminUserId: string,
+  ) => {
+    await ensureBasePlans();
+    const normalizedCode = normalizePlanCode(code);
+    if (!normalizedCode) {
+      throw new ApiError(400, "Plan code is invalid");
+    }
+
+    const existing = await subscriptionRepository.getPlanByCode(normalizedCode);
+    if (!existing) {
+      throw new ApiError(404, "Subscription plan not found");
+    }
+
+    if (normalizedCode === FREE_PLAN_CODE && payload.isActive === false) {
+      throw new ApiError(400, "FREE plan cannot be disabled");
+    }
+
+    const nextLimits = {
+      ...toLimits((existing as { limits?: unknown }).limits),
+      ...(payload.limits || {}),
+    };
+
+    const updated = await subscriptionRepository.updatePlanByCode(normalizedCode, {
+      actorTypes: payload.actorTypes?.length ? payload.actorTypes : existing.actorTypes,
+      name: payload.name !== undefined ? payload.name.trim() : existing.name,
+      description: payload.description !== undefined ? payload.description.trim() : existing.description,
+      priceInr:
+        typeof payload.priceInr === "number"
+          ? Math.max(0, Math.round(payload.priceInr))
+          : Number(existing.priceInr || 0),
+      billingCycle: payload.billingCycle || existing.billingCycle,
+      limits: {
+        maxPortfolioImages: Math.floor(nextLimits.maxPortfolioImages),
+        maxVideoLinks: Math.floor(nextLimits.maxVideoLinks),
+        maxPackages: Math.floor(nextLimits.maxPackages),
+      },
+      isActive: payload.isActive ?? existing.isActive,
+      updatedBy: adminUserId,
+    });
+
+    if (!updated) {
+      throw new ApiError(404, "Subscription plan not found");
+    }
+
+    return updated;
+  },
   createCheckoutIntent: async (
     authUser: Pick<AuthenticatedUser, "id" | "role">,
-    payload: { planCode: PlanCode; paymentProvider?: "manual" | "razorpay"; paymentReference?: string },
+    payload: { planCode: string; paymentProvider?: "manual" | "razorpay"; paymentReference?: string },
   ) => {
     const actor = await resolveActor(authUser);
     await ensureBasePlans();
 
-    if (payload.planCode !== PRO_PLAN_CODE) {
-      throw new ApiError(400, "Only PRO_YEARLY_4999 is supported for checkout intent");
+    const planCode = normalizePlanCode(payload.planCode);
+    if (!planCode) {
+      throw new ApiError(400, "Plan code is required");
+    }
+    if (planCode === FREE_PLAN_CODE) {
+      throw new ApiError(400, "FREE plan cannot be used for checkout intent");
     }
 
-    const plan = await subscriptionRepository.getPlanByCode(payload.planCode);
+    const plan = await subscriptionRepository.getPlanByCode(planCode);
     if (!plan || !plan.isActive) {
       throw new ApiError(404, "Subscription plan is not available");
+    }
+    if (Number(plan.priceInr || 0) <= 0) {
+      throw new ApiError(400, "Selected plan is not configured for paid checkout");
     }
 
     if (!Array.isArray(plan.actorTypes) || !plan.actorTypes.includes(actor.actorType)) {
@@ -347,7 +472,7 @@ export const subscriptionService = {
       const stillActive =
         latestStatus === "active" &&
         latestPaymentStatus === "confirmed" &&
-        latestPlanCode === PRO_PLAN_CODE &&
+        latestPlanCode === planCode &&
         (!latestEndsAt || latestEndsAt.getTime() >= Date.now());
 
       if (stillActive) {
@@ -356,7 +481,7 @@ export const subscriptionService = {
 
       const canReusePendingRazorpayOrder =
         (payload.paymentProvider || "manual") === "razorpay" &&
-        latestPlanCode === PRO_PLAN_CODE &&
+        latestPlanCode === planCode &&
         latestStatus === "pending_payment" &&
         latestPaymentStatus === "pending" &&
         latestProvider === "razorpay" &&
@@ -376,7 +501,7 @@ export const subscriptionService = {
             amountPaise,
             currency: "INR" as const,
             subscriptionId: String((latest as { _id?: unknown })._id || ""),
-            planCode: payload.planCode,
+            planCode,
           },
         };
       }
@@ -408,14 +533,14 @@ export const subscriptionService = {
         notes: {
           actorType: actor.actorType,
           actorId: actor.actorId,
-          planCode: payload.planCode,
+          planCode,
         },
       });
 
       const subscription = await subscriptionRepository.createAccountSubscription({
         actorType: actor.actorType,
         actorId: actor.actorId,
-        planCode: payload.planCode,
+        planCode,
         status: "pending_payment",
         paymentStatus: "pending",
         paymentProvider: "razorpay",
@@ -442,7 +567,7 @@ export const subscriptionService = {
           amountPaise,
           currency: "INR",
           subscriptionId: String((subscription as { _id?: unknown })._id || ""),
-          planCode: payload.planCode,
+          planCode,
         },
       };
     }
@@ -450,7 +575,7 @@ export const subscriptionService = {
     const subscription = await subscriptionRepository.createAccountSubscription({
       actorType: actor.actorType,
       actorId: actor.actorId,
-      planCode: payload.planCode,
+      planCode,
       status: "pending_payment",
       paymentStatus: "pending",
       paymentProvider: payload.paymentProvider || "manual",
@@ -644,7 +769,7 @@ export const subscriptionService = {
     status?: "inactive" | "pending_payment" | "active" | "expired" | "cancelled";
     paymentStatus?: "pending" | "confirmed" | "failed";
     actorType?: "vendor" | "venue_owner";
-    planCode?: PlanCode;
+    planCode?: string;
     page?: number;
     limit?: number;
   }) => {
@@ -803,7 +928,7 @@ export const subscriptionService = {
 
     throw new ApiError(
       403,
-      `SUBSCRIPTION_LIMIT_REACHED:${key}:${nextUsageValue}:${limit}:upgrade_required:${PRO_PLAN_CODE}`,
+      `SUBSCRIPTION_LIMIT_REACHED:${key}:${nextUsageValue}:${limit}:upgrade_required:${DEFAULT_PRO_PLAN_CODE}`,
     );
   },
 };

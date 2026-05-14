@@ -1,7 +1,9 @@
 import dotenv from "dotenv";
+import path from "path";
 import { z } from "zod";
 
-dotenv.config();
+// Load backend .env explicitly so runtime config does not depend on current working directory.
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const envSchema = z
   .object({

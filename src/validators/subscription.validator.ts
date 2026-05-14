@@ -11,7 +11,7 @@ export const listMySubscriptionPlansSchema = actorAccessSchema;
 
 export const createSubscriptionCheckoutIntentSchema = z.object({
   body: z.object({
-    planCode: z.enum(["PRO_YEARLY_4999"]),
+    planCode: z.string().min(1),
     paymentProvider: z.enum(["manual", "razorpay"]).optional().default("manual"),
     paymentReference: z.string().optional().default(""),
   }),
@@ -65,10 +65,57 @@ export const adminListSubscriptionRequestsSchema = z.object({
     status: z.enum(["inactive", "pending_payment", "active", "expired", "cancelled"]).optional(),
     paymentStatus: z.enum(["pending", "confirmed", "failed"]).optional(),
     actorType: z.enum(["vendor", "venue_owner"]).optional(),
-    planCode: z.enum(["FREE", "PRO_YEARLY_4999"]).optional(),
+    planCode: z.string().optional(),
     page: z.coerce.number().int().min(1).optional(),
     limit: z.coerce.number().int().min(1).max(300).optional(),
   }),
+  params: z.object({}).default({}),
+});
+
+const subscriptionPlanLimitsSchema = z.object({
+  maxPortfolioImages: z.number().int().min(-1),
+  maxVideoLinks: z.number().int().min(-1),
+  maxPackages: z.number().int().min(-1),
+});
+
+export const adminCreateSubscriptionPlanSchema = z.object({
+  body: z.object({
+    code: z.string().min(2).max(60),
+    actorTypes: z.array(z.enum(["vendor", "venue_owner"])).optional(),
+    name: z.string().min(2).max(120),
+    description: z.string().optional().default(""),
+    priceInr: z.number().min(0),
+    billingCycle: z.enum(["yearly", "monthly", "one_time"]),
+    limits: subscriptionPlanLimitsSchema,
+    isActive: z.boolean().optional(),
+  }),
+  query: z.object({}).default({}),
+  params: z.object({}).default({}),
+});
+
+export const adminUpdateSubscriptionPlanSchema = z.object({
+  body: z
+    .object({
+      actorTypes: z.array(z.enum(["vendor", "venue_owner"])).optional(),
+      name: z.string().min(2).max(120).optional(),
+      description: z.string().optional(),
+      priceInr: z.number().min(0).optional(),
+      billingCycle: z.enum(["yearly", "monthly", "one_time"]).optional(),
+      limits: subscriptionPlanLimitsSchema.partial().optional(),
+      isActive: z.boolean().optional(),
+    })
+    .refine((value) => Object.keys(value).length > 0, {
+      message: "At least one field is required to update plan",
+    }),
+  query: z.object({}).default({}),
+  params: z.object({
+    code: z.string().min(1),
+  }),
+});
+
+export const adminListSubscriptionPlansSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
   params: z.object({}).default({}),
 });
 

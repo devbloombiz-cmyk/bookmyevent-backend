@@ -1,4 +1,5 @@
 import { subscriptionService } from "../services/subscription.service";
+import { paymentRequestService } from "../services/payment-request.service";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 import { ApiError } from "../utils/api-error";
@@ -27,6 +28,29 @@ export const subscriptionController = {
       role: authUser.role,
     });
     return sendSuccess(res, "Subscription plans fetched", { plans });
+  }),
+  listPlansByAdmin: asyncHandler(async (_req, res) => {
+    const plans = await subscriptionService.listPlansForAdmin();
+    return sendSuccess(res, "Subscription plans fetched", { plans });
+  }),
+  createPlanByAdmin: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { plan: null }, 401);
+    }
+
+    const plan = await subscriptionService.createPlanByAdmin(req.body, authUser.id);
+    return sendSuccess(res, "Subscription plan created", { plan }, 201);
+  }),
+  updatePlanByAdmin: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { plan: null }, 401);
+    }
+
+    const code = String(req.params.code || "").trim();
+    const plan = await subscriptionService.updatePlanByAdmin(code, req.body, authUser.id);
+    return sendSuccess(res, "Subscription plan updated", { plan });
   }),
   createMyCheckoutIntent: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
@@ -92,7 +116,10 @@ export const subscriptionController = {
         | undefined,
       paymentStatus: req.query.paymentStatus as "pending" | "confirmed" | "failed" | undefined,
       actorType: req.query.actorType as "vendor" | "venue_owner" | undefined,
-      planCode: req.query.planCode as "FREE" | "PRO_YEARLY_4999" | undefined,
+      planCode:
+        typeof req.query.planCode === "string" && req.query.planCode.trim()
+          ? req.query.planCode.trim()
+          : undefined,
       page:
         typeof req.query.page === "number"
           ? req.query.page
@@ -122,7 +149,10 @@ export const subscriptionController = {
     }
 
     const signatureHeader = String(req.headers["x-razorpay-signature"] || "");
-    const result = await subscriptionService.processRazorpayWebhook(rawBody, signatureHeader);
+    const paymentResult = await paymentRequestService.processRazorpayWebhook(rawBody, signatureHeader);
+    const result = paymentResult.handled
+      ? paymentResult
+      : await subscriptionService.processRazorpayWebhook(rawBody, signatureHeader);
     return res.status(200).json({ success: true, message: "Razorpay webhook received", data: { result } });
   }),
 };

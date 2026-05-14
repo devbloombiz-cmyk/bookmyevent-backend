@@ -163,6 +163,8 @@ const venueOwnerSchema = new Schema(
     approvalStatus: { type: String, enum: ["pending", "active", "disabled"], default: "pending" },
     isActive: { type: Boolean, default: true },
     linkedVendorId: { type: Schema.Types.ObjectId, ref: "Vendor", default: null },
+    rating: { type: Number, default: 0, min: 0, max: 5 },
+    reviewCount: { type: Number, default: 0, min: 0 },
     profileImages: { type: [String], default: [] },
     venuePackages: { type: [venuePackageSchema], default: [] },
   },

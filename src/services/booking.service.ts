@@ -8,6 +8,8 @@ import { bookingNotificationService } from "./notifications/booking/booking-noti
 import { logger } from "../config/logger";
 import { paymentRequestService } from "./payment-request.service";
 import { activityTimelineService } from "./activity-timeline.service";
+import { leadRepository } from "../repositories/lead.repository";
+import { userRepository } from "../repositories/user.repository";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -21,6 +23,83 @@ const validBookingTransitions: Record<string, string[]> = {
   initiated: ["confirmed", "upcoming", "cancelled"],
   confirmed: ["completed", "cancelled", "upcoming"],
 };
+
+function normalizeMobile(rawValue: string) {
+  const trimmed = String(rawValue || "").trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return digits.length >= 10 ? digits : "";
+}
+
+function extractFromMessage(message: string | undefined, label: string) {
+  if (!message) {
+    return "";
+  }
+
+  const aliases: Record<string, string[]> = {
+    customer: ["Customer Name", "Name"],
+    mobile: ["Mobile Number", "Contact", "Contact Number", "Phone", "Phone Number", "WhatsApp"],
+    email: ["Email Address", "Mail"],
+  };
+
+  const candidates = [label, ...(aliases[label.trim().toLowerCase()] || [])];
+  for (const candidate of candidates) {
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(?:^|\\n)\\s*${escaped}\\s*:\\s*([^\\n\\r]+)`, "i");
+    const value = message.match(regex)?.[1]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
+async function hydrateBookingCustomerDetails(booking: Record<string, unknown>) {
+  const lead = booking.leadId ? await leadRepository.findById(String(booking.leadId)) : null;
+  const customer = booking.customerId ? await userRepository.findById(String(booking.customerId)) : null;
+
+  const customerName =
+    String(booking.customerName || "").trim() ||
+    String(customer?.name || "").trim() ||
+    String(lead?.customerName || "").trim() ||
+    extractFromMessage(String(lead?.message || ""), "Customer") ||
+    "Customer";
+
+  const customerMobile =
+    normalizeMobile(String(booking.customerMobile || "")) ||
+    normalizeMobile(String(customer?.mobile || "")) ||
+    normalizeMobile(String(lead?.customerMobile || "")) ||
+    normalizeMobile(extractFromMessage(String(lead?.message || ""), "Mobile"));
+
+  const customerEmail =
+    String(booking.customerEmail || "").trim() ||
+    String(customer?.email || "").trim() ||
+    String(lead?.customerEmail || "").trim() ||
+    extractFromMessage(String(lead?.message || ""), "Email");
+
+  const nextPayload = {
+    customerName,
+    customerMobile,
+    customerEmail,
+  };
+
+  const hasChanges =
+    String(booking.customerName || "").trim() !== nextPayload.customerName ||
+    String(booking.customerMobile || "").trim() !== nextPayload.customerMobile ||
+    String(booking.customerEmail || "").trim() !== nextPayload.customerEmail;
+
+  if (hasChanges && booking._id) {
+    const updated = await bookingRepository.updateById(String(booking._id), nextPayload);
+    if (updated) {
+      return updated;
+    }
+  }
+
+  return {
+    ...booking,
+    ...nextPayload,
+  };
+}
 
 export const bookingService = {
   createBooking: async (payload: Record<string, unknown>, authUser: AuthUser) => {
@@ -76,25 +155,27 @@ export const bookingService = {
     return booking;
   },
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
-    if (authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)) {
-      return bookingRepository.findByCustomer(authUser.id);
-    }
+    let bookings;
 
-    if (
+    if (authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)) {
+      bookings = await bookingRepository.findByCustomer(authUser.id);
+    } else if (
       authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
       authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
     ) {
       const vendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
         ? await resolveVendorIdForAuthUser(authUser)
         : await resolveVendorIdForScopedUser(authUser);
-      return bookingRepository.findByVendor(vendorId);
+      bookings = await bookingRepository.findByVendor(vendorId);
+    } else if (typeof filters.vendorId === "string" && filters.vendorId) {
+      bookings = await bookingRepository.findByVendor(filters.vendorId);
+    } else {
+      bookings = await bookingRepository.findAll();
     }
 
-    if (typeof filters.vendorId === "string" && filters.vendorId) {
-      return bookingRepository.findByVendor(filters.vendorId);
-    }
-
-    return bookingRepository.findAll();
+    return Promise.all(
+      bookings.map((booking) => hydrateBookingCustomerDetails(booking.toObject() as Record<string, unknown>)),
+    );
   },
   updateBooking: async (bookingId: string, payload: Record<string, unknown>, authUser: AuthUser) => {
     const existing = await bookingRepository.findById(bookingId);
@@ -163,6 +244,7 @@ export const bookingService = {
       notes?: string;
       paymentExpiry?: string;
       sendWhatsApp?: boolean;
+      customerMobile?: string;
     },
     authUser: AuthUser,
   ) => {

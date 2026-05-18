@@ -55,6 +55,7 @@ export const bookingBalanceRequestSchema = z.object({
     notes: z.string().optional(),
     paymentExpiry: z.string().optional(),
     sendWhatsApp: z.boolean().optional().default(false),
+    customerMobile: z.string().min(8).max(20).optional(),
   }),
   query: z.object({}),
   params: z.object({

@@ -35,6 +35,7 @@ type CreateBalancePayload = {
   notes?: string;
   paymentExpiry?: string;
   sendWhatsApp?: boolean;
+  customerMobile?: string;
 };
 
 function resolveRazorpayCredentials() {
@@ -71,13 +72,32 @@ function normalizeMobile(rawValue: string) {
   return digits.length >= 10 ? digits : "";
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function extractFromMessage(message: string | undefined, label: string) {
   if (!message) {
     return "";
   }
 
-  const regex = new RegExp(`${label}:\\s*(.+)`, "i");
-  return message.match(regex)?.[1]?.trim() || "";
+  const aliases: Record<string, string[]> = {
+    customer: ["Customer Name", "Name"],
+    mobile: ["Mobile Number", "Contact", "Contact Number", "Phone", "Phone Number", "WhatsApp"],
+    email: ["Email Address", "Mail"],
+  };
+
+  const normalizedKey = label.trim().toLowerCase();
+  const candidates = [label, ...(aliases[normalizedKey] || [])];
+  for (const candidate of candidates) {
+    const regex = new RegExp(`(?:^|\\n)\\s*${escapeRegExp(candidate)}\\s*:\\s*([^\\n\\r]+)`, "i");
+    const value = message.match(regex)?.[1]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
 }
 
 async function ensureLeadAccess(leadId: string, authUser: AuthUser) {
@@ -304,77 +324,6 @@ async function applyPaymentToBooking(bookingId: string, amountPaidDelta: number)
   });
 
   return updated;
-}
-
-async function autoCreateBookingForAdvancePayment(paymentRequestId: string) {
-  const request = await paymentRequestRepository.findById(paymentRequestId);
-  if (!request || !request.leadId) {
-    return null;
-  }
-
-  const leadId = String(request.leadId);
-  const existingBooking = await bookingRepository.findByLeadId(leadId);
-  if (existingBooking) {
-    await applyPaymentToBooking(String(existingBooking._id), Number(request.paidAmount || 0));
-    return existingBooking;
-  }
-
-  const lead = await leadRepository.findById(leadId);
-  if (!lead) {
-    return null;
-  }
-
-  if (!request.packageId) {
-    logger.warn({ event: "payment.booking.skip", paymentRequestId }, "Skipping auto booking creation: packageId missing");
-    return null;
-  }
-
-  const booking = await bookingRepository.create({
-    customerId: lead.customerId ?? null,
-    customerName: String(lead.customerName || "").trim(),
-    customerMobile: String(lead.customerMobile || "").trim(),
-    customerEmail: String(lead.customerEmail || "").trim(),
-    vendorId: lead.vendorId,
-    leadId: lead._id,
-    packageId: request.packageId,
-    eventDate: lead.eventDate,
-    eventSlot: lead.eventSlot,
-    amount: request.finalAmount,
-    advancePaid: request.paidAmount,
-    paidAmount: request.paidAmount,
-    dueAmount: Math.max(0, Number(request.finalAmount || 0) - Number(request.paidAmount || 0)),
-    paymentStatus: Number(request.paidAmount || 0) > 0 ? "paid" : "pending",
-    bookingStatus: "upcoming",
-    vendorAmount: request.finalAmount,
-    settledAmount: 0,
-    pendingSettlement: request.finalAmount,
-    settlementStatus: "PENDING",
-  });
-
-  await activityTimelineService.addEvent({
-    entityType: "booking",
-    entityId: String((booking as { _id?: unknown })._id || ""),
-    vendorId: String(lead.vendorId),
-    event: "BOOKING_CONFIRMED",
-    message: "Booking auto-created after advance payment",
-    metadata: { leadId: String(lead._id), paymentRequestId },
-  });
-
-  await leadRepository.updateById(leadId, {
-    status: "BOOKED",
-    paymentStatus: "paid",
-  });
-
-  if (booking && lead.customerId) {
-    await bookingNotificationService.sendCustomerBookingConfirmation({
-      bookingId: String((booking as { _id?: unknown })._id || ""),
-      customerId: String(lead.customerId),
-      vendorId: String(lead.vendorId),
-      packageId: String(request.packageId),
-    });
-  }
-
-  return booking;
 }
 
 export const paymentRequestService = {
@@ -639,6 +588,10 @@ export const paymentRequestService = {
     authUser: AuthUser,
   ) => {
     const lead = await ensureLeadAccess(leadId, authUser);
+    const existingBooking = await bookingRepository.findByLeadId(leadId);
+    if (payload.markBooked && existingBooking) {
+      return { paymentRequest: null, booking: existingBooking };
+    }
 
     if (!Number.isFinite(payload.finalAmount) || payload.finalAmount <= 0) {
       throw new ApiError(400, "finalAmount must be greater than zero");
@@ -707,24 +660,40 @@ export const paymentRequestService = {
     }
 
     const latestPaidAdvance = await paymentRequestRepository.findLatestPaidAdvanceByLeadId(leadId);
-    if (!latestPaidAdvance || !latestPaidAdvance.packageId) {
+    const latestAdvance = await paymentRequestRepository.findLatestAdvanceByLeadId(leadId);
+    const mappedAdvance =
+      (latestPaidAdvance && latestPaidAdvance.packageId ? latestPaidAdvance : null) ||
+      (latestAdvance && latestAdvance.packageId ? latestAdvance : null);
+
+    if (!mappedAdvance) {
       throw new ApiError(
         400,
         "No paid advance found with package mapping. Record payment first before marking booked.",
       );
     }
 
-    const totalAmount = Number(latestPaidAdvance.finalAmount || lead.quoteAmount || 0);
-    const paidAmount = Number(latestPaidAdvance.paidAmount || 0);
+    const isPaid = String(mappedAdvance.status || "").toLowerCase() === "paid";
+    const totalAmount = Number(mappedAdvance.finalAmount || lead.quoteAmount || 0);
+    const paidAmount = isPaid ? Number(mappedAdvance.paidAmount || 0) : 0;
+    const customerMobile =
+      String(lead.customerMobile || "").trim() ||
+      normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
+    const customerName =
+      String(lead.customerName || "").trim() ||
+      extractFromMessage(String(lead.message || ""), "Customer") ||
+      "Customer";
+    const customerEmail =
+      String(lead.customerEmail || "").trim() ||
+      extractFromMessage(String(lead.message || ""), "Email");
 
     const booking = await bookingRepository.create({
       customerId: lead.customerId ?? null,
-      customerName: String(lead.customerName || "").trim(),
-      customerMobile: String(lead.customerMobile || "").trim(),
-      customerEmail: String(lead.customerEmail || "").trim(),
+      customerName,
+      customerMobile,
+      customerEmail,
       vendorId: lead.vendorId,
       leadId: lead._id,
-      packageId: latestPaidAdvance.packageId,
+      packageId: mappedAdvance.packageId,
       eventDate: lead.eventDate,
       eventSlot: lead.eventSlot,
       amount: totalAmount,
@@ -763,7 +732,7 @@ export const paymentRequestService = {
       await trySendBookingConfirmedWhatsapp({
         mobile,
         bookingId: String((booking as { _id?: unknown })._id || ""),
-        packageName: String(latestPaidAdvance.packageName || lead.venuePackageName || ""),
+        packageName: String(mappedAdvance.packageName || lead.venuePackageName || ""),
         eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
       });
     }
@@ -786,7 +755,10 @@ export const paymentRequestService = {
       booking.toObject() as Record<string, unknown>,
     );
 
-    if (!customerMobile) {
+    const payloadCustomerMobile = normalizeMobile(String(payload.customerMobile || ""));
+    const effectiveCustomerMobile = customerMobile || payloadCustomerMobile;
+
+    if (!effectiveCustomerMobile) {
       throw new ApiError(
         400,
         "Customer mobile number is required. Update customer mobile on lead or booking before generating balance link.",
@@ -795,12 +767,12 @@ export const paymentRequestService = {
 
     if (
       String((booking as { customerName?: unknown }).customerName || "").trim() !== customerName ||
-      String((booking as { customerMobile?: unknown }).customerMobile || "").trim() !== customerMobile ||
+      String((booking as { customerMobile?: unknown }).customerMobile || "").trim() !== effectiveCustomerMobile ||
       String((booking as { customerEmail?: unknown }).customerEmail || "").trim() !== customerEmail
     ) {
       await bookingRepository.updateById(String(booking._id), {
         customerName,
-        customerMobile,
+        customerMobile: effectiveCustomerMobile,
         customerEmail,
       });
     }
@@ -813,7 +785,7 @@ export const paymentRequestService = {
     try {
       paymentLink = await createRazorpayPaymentLink({
         customerName,
-        customerMobile,
+        customerMobile: effectiveCustomerMobile,
         customerEmail,
         amount: payload.amount,
         referenceId,
@@ -852,7 +824,7 @@ export const paymentRequestService = {
     const sentToWhatsapp =
       payload.sendWhatsApp === true
         ? await trySendPaymentLinkWhatsapp({
-            mobile: customerMobile,
+            mobile: effectiveCustomerMobile,
             amount: payload.amount,
             paymentLink: paymentLink.shortUrl,
             notes: payload.notes,
@@ -904,12 +876,14 @@ export const paymentRequestService = {
       return { handled: false, reason: "webhook_secret_missing" };
     }
 
-    const expectedSignature = crypto
-      .createHmac("sha256", credentials.webhookSecret)
-      .update(rawBody)
-      .digest("hex");
+    const providedSignature = String(signatureHeader || "").trim();
+    if (!/^[a-fA-F0-9]{64}$/.test(providedSignature)) {
+      throw new ApiError(401, "Invalid webhook signature");
+    }
 
-    if (expectedSignature !== signatureHeader) {
+    const expectedDigest = crypto.createHmac("sha256", credentials.webhookSecret).update(rawBody).digest();
+    const providedDigest = Buffer.from(providedSignature, "hex");
+    if (providedDigest.length !== expectedDigest.length || !crypto.timingSafeEqual(providedDigest, expectedDigest)) {
       throw new ApiError(401, "Invalid webhook signature");
     }
 
@@ -922,6 +896,11 @@ export const paymentRequestService = {
     const eventType = String(payload.event || "").trim();
     if (!eventType) {
       throw new ApiError(400, "Webhook event type is missing");
+    }
+
+    const paidEventTypes = new Set(["payment_link.paid", "payment.captured", "order.paid"]);
+    if (!paidEventTypes.has(eventType)) {
+      return { handled: false, reason: "unsupported_event_type", eventType };
     }
 
     const webhookEventId = (() => {
@@ -975,6 +954,18 @@ export const paymentRequestService = {
 
     const paymentLinkId = String(paymentLinkEntity?.id || paymentEntity?.order_id || "").trim();
 
+    const paymentNotes = (() => {
+      if (paymentEntity?.notes && typeof paymentEntity.notes === "object") {
+        return paymentEntity.notes as Record<string, unknown>;
+      }
+
+      if (paymentLinkEntity?.notes && typeof paymentLinkEntity.notes === "object") {
+        return paymentLinkEntity.notes as Record<string, unknown>;
+      }
+
+      return {} as Record<string, unknown>;
+    })();
+
     let paymentRequest = referenceId
       ? await paymentRequestRepository.findByRazorpayReferenceId(referenceId)
       : null;
@@ -983,11 +974,28 @@ export const paymentRequestService = {
     }
 
     if (!paymentRequest) {
+      const noteLeadId = String(paymentNotes.leadId || "").trim();
+      const noteBookingId = String(paymentNotes.bookingId || "").trim();
+      const notePaymentType = String(paymentNotes.paymentType || "").trim().toUpperCase();
+
+      if (noteLeadId && notePaymentType === "ADVANCE") {
+        paymentRequest = await paymentRequestRepository.findLatestPendingAdvanceByLeadId(noteLeadId);
+      }
+
+      if (!paymentRequest && noteBookingId) {
+        paymentRequest = await paymentRequestRepository.findLatestPendingByBookingId(noteBookingId);
+      }
+    }
+
+    if (!paymentRequest) {
       return { handled: false, reason: "payment_request_not_found" };
     }
 
     const paidAmountPaise = Number(paymentLinkEntity?.amount_paid || paymentEntity?.amount || 0);
-    const paidAmount = Math.max(0, paidAmountPaise / 100);
+    const paidAmount = Math.max(
+      0,
+      paidAmountPaise > 0 ? paidAmountPaise / 100 : Number(paymentRequest.requestedAmount || 0),
+    );
 
     const updatedRequest = await paymentRequestRepository.updateByIdempotentWebhook(
       String(paymentRequest._id),

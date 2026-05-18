@@ -10,6 +10,7 @@
     "start": "node dist/server.js",
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "seed:locations": "tsx src/scripts/seed-locations.ts",
+    "repair:bookings:customer-fields": "tsx src/scripts/backfill-booking-customer-fields.ts",
     "test:redirect-matrix": "tsx src/scripts/redirect-matrix.ts",
     "test:subscriptions:razorpay": "tsx --test src/tests/confirm-razorpay.integration.test.ts",
     "lint": "eslint .",

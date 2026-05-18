@@ -29,6 +29,35 @@ const validLeadTransitions: Record<string, string[]> = {
   COMPLETED: [],
 };
 
+function normalizeMobile(rawValue: string) {
+  const trimmed = String(rawValue || "").trim();
+  const digits = trimmed.replace(/\D/g, "");
+  return digits.length >= 10 ? digits : "";
+}
+
+function extractFromMessage(message: string | undefined, label: string) {
+  if (!message) {
+    return "";
+  }
+
+  const aliases: Record<string, string[]> = {
+    customer: ["Customer Name", "Name"],
+    mobile: ["Mobile Number", "Contact", "Contact Number", "Phone", "Phone Number", "WhatsApp"],
+    email: ["Email Address", "Mail"],
+  };
+
+  const candidates = [label, ...(aliases[label.trim().toLowerCase()] || [])];
+  for (const candidate of candidates) {
+    const regex = new RegExp(`(?:^|\\n)\\s*${candidate.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*:\\s*([^\\n\\r]+)`, "i");
+    const value = message.match(regex)?.[1]?.trim();
+    if (value) {
+      return value;
+    }
+  }
+
+  return "";
+}
+
 async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: string) {
   if (
     authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
@@ -158,11 +187,19 @@ export const leadService = {
       throw new ApiError(409, "This lead is already converted to booking");
     }
 
+    const customerName =
+      String(lead.customerName || "").trim() || extractFromMessage(String(lead.message || ""), "Customer");
+    const customerMobile =
+      normalizeMobile(String(lead.customerMobile || "")) ||
+      normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
+    const customerEmail =
+      String(lead.customerEmail || "").trim() || extractFromMessage(String(lead.message || ""), "Email");
+
     const booking = await bookingRepository.create({
       customerId: lead.customerId ?? null,
-      customerName: String(lead.customerName || "").trim(),
-      customerMobile: String(lead.customerMobile || "").trim(),
-      customerEmail: String(lead.customerEmail || "").trim(),
+      customerName,
+      customerMobile,
+      customerEmail,
       vendorId: lead.vendorId,
       leadId: lead._id,
       packageId: payload.packageId,

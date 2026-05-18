@@ -8,7 +8,11 @@ export const paymentRequestRepository = {
     PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE" }).sort({ createdAt: -1 }),
   findLatestPaidAdvanceByLeadId: (leadId: string) =>
     PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE", status: "paid" }).sort({ createdAt: -1 }),
+  findLatestPendingAdvanceByLeadId: (leadId: string) =>
+    PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE", status: "pending" }).sort({ createdAt: -1 }),
   findByBookingId: (bookingId: string) => PaymentRequestModel.find({ bookingId }).sort({ createdAt: -1 }),
+  findLatestPendingByBookingId: (bookingId: string) =>
+    PaymentRequestModel.findOne({ bookingId, status: "pending" }).sort({ createdAt: -1 }),
   findByRazorpayReferenceId: (referenceId: string) =>
     PaymentRequestModel.findOne({ razorpayReferenceId: referenceId.trim() }),
   findByRazorpayPaymentLinkId: (paymentLinkId: string) =>

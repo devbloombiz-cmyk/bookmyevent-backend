@@ -9,8 +9,54 @@ type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
 };
 
+const normalizeUrlArray = (value: unknown, maxItems: number) => {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  const uniqueValues = Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  const normalized: string[] = [];
+  for (const candidate of uniqueValues) {
+    if (normalized.length >= maxItems) {
+      break;
+    }
+
+    try {
+      normalized.push(new URL(candidate).toString());
+    } catch {
+      continue;
+    }
+  }
+
+  return normalized;
+};
+
+const normalizeVendorPackagePayload = (payload: Record<string, unknown>) => {
+  const normalized = { ...payload };
+
+  if ("portfolioImages" in payload) {
+    normalized.portfolioImages = normalizeUrlArray(payload.portfolioImages, 4);
+  }
+
+  if ("videoLinks" in payload) {
+    normalized.videoLinks = normalizeUrlArray(payload.videoLinks, 4);
+  }
+
+  return normalized;
+};
+
 export const packageService = {
   createVendorPackage: async (payload: Record<string, unknown>, authUser: AuthUser) => {
+    const normalizedPayload = normalizeVendorPackagePayload(payload);
+
     if (authUser.permissions.includes(PermissionKeys.PackageVendorCreateOwn)) {
       const ownVendorId = await resolveVendorIdForAuthUser(authUser);
       const packages = await packageRepository.listVendorPackages(ownVendorId, true);
@@ -20,10 +66,10 @@ export const packageService = {
         packages.length + 1,
       );
 
-      return packageRepository.createVendorPackage({ ...payload, vendorId: ownVendorId });
+      return packageRepository.createVendorPackage({ ...normalizedPayload, vendorId: ownVendorId });
     }
 
-    return packageRepository.createVendorPackage(payload);
+    return packageRepository.createVendorPackage(normalizedPayload);
   },
   listVendorPackages: async (
     vendorId: string | undefined,
@@ -38,6 +84,7 @@ export const packageService = {
     return packageRepository.listVendorPackages(vendorId, includeInactive);
   },
   updateVendorPackage: async (packageId: string, payload: Record<string, unknown>, authUser: AuthUser) => {
+    const normalizedPayload = normalizeVendorPackagePayload(payload);
     const existing = await packageRepository.findVendorPackageById(packageId);
     if (!existing) {
       throw new ApiError(404, "Vendor package not found");
@@ -50,7 +97,7 @@ export const packageService = {
       }
     }
 
-    const vendorPackage = await packageRepository.updateVendorPackage(packageId, payload);
+    const vendorPackage = await packageRepository.updateVendorPackage(packageId, normalizedPayload);
     if (!vendorPackage) {
       throw new ApiError(404, "Vendor package not found");
     }

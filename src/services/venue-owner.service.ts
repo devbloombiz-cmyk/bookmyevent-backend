@@ -7,6 +7,8 @@ import type { UserRole } from "../types/domain";
 import { hashPassword } from "../utils/password";
 import { subscriptionService } from "./subscription.service";
 import { subscriptionRepository } from "../repositories/subscription.repository";
+import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
+import { logger } from "../config/logger";
 
 const defaultIncludedServiceItems = [
   "Hall Rental",
@@ -240,6 +242,8 @@ const normalizeTimeValue = (value: unknown) => {
   return /^([01]\d|2[0-3]):([0-5]\d)$/.test(normalized) ? normalized : "";
 };
 
+const uniqueList = (value: unknown) => Array.from(new Set(listFields(value)));
+
 const normalizeVenuePackage = (pkg: unknown) => {
   const src = typeof pkg === "object" && pkg !== null ? (pkg as Record<string, unknown>) : {};
   const minGuestCapacity = typeof src.minGuestCapacity === "number" ? Math.max(0, src.minGuestCapacity) : 0;
@@ -272,8 +276,10 @@ const normalizeVenuePackage = (pkg: unknown) => {
     description: normalizeText(src.description),
     descriptionHighlights: listFields(src.descriptionHighlights),
     coverImage: normalizeText(src.coverImage),
-    portfolioImages: listFields(src.portfolioImages),
-    videoLinks: listFields(src.videoLinks).map((item) => normalizeUrl(item)).filter(Boolean),
+    portfolioImages: uniqueList(src.portfolioImages),
+    videoLinks: uniqueList(src.videoLinks)
+      .map((item) => normalizeUrl(item))
+      .filter(Boolean),
     venueStartTime: normalizeTimeValue(src.venueStartTime),
     venueEndTime: normalizeTimeValue(src.venueEndTime),
     inclusions: listFields(src.inclusions),
@@ -479,11 +485,64 @@ const syncVenueOwnerUserStatus = async (
         ? venueOwnerRecord.isActive
         : true;
 
-  const shouldBeActive = isRecordActive && approvalStatus !== "disabled";
+  const shouldBeActive = isRecordActive && approvalStatus === "active";
   await userRepository.updateById(user.id, {
     isActive: shouldBeActive,
     role: "venue_owner",
   });
+};
+
+const ensureVenueOwnerProfileUniqueness = async (options: {
+  email?: string;
+  mobile?: string;
+  excludeVenueOwnerId?: string;
+}) => {
+  const normalizedEmail = normalizeText(options.email).toLowerCase();
+  const normalizedMobile = normalizeText(options.mobile);
+  const existingVenueOwner = await venueOwnerRepository.findByEmailOrMobile(
+    normalizedEmail,
+    normalizedMobile,
+  );
+
+  if (!existingVenueOwner) {
+    return;
+  }
+
+  if (
+    options.excludeVenueOwnerId &&
+    String(existingVenueOwner._id) === options.excludeVenueOwnerId
+  ) {
+    return;
+  }
+
+  throw new ApiError(409, "Venue owner already exists for this email or mobile");
+};
+
+const notifyVenueOwnerApprovalActivated = async (venueOwnerRecord: Record<string, unknown>) => {
+  const mobile = normalizeText(venueOwnerRecord.mobile);
+  if (!mobile || !ultramsgWhatsappService.isEnabled()) {
+    return;
+  }
+
+  const businessName = normalizeText(venueOwnerRecord.businessName) || "your venue profile";
+  const message = `BookMyEvent update: ${businessName} is approved. You can now login at /login and continue onboarding.`;
+
+  try {
+    await ultramsgWhatsappService.sendMessage({
+      to: mobile,
+      body: message,
+      context: "venue_owner_approval",
+    });
+  } catch (error) {
+    logger.warn(
+      {
+        venueOwnerId: String(venueOwnerRecord._id || ""),
+        mobile,
+        error,
+      },
+      "Unable to send venue owner approval WhatsApp notification",
+    );
+  }
 };
 
 const syncLocationIfPresent = async (payload: Record<string, unknown>) => {
@@ -507,13 +566,10 @@ export const venueOwnerService = {
     const normalizedEmail = normalizeText(normalizedPayload.email).toLowerCase();
     const normalizedMobile = normalizeText(normalizedPayload.mobile);
 
-    const existingVenueOwner = await venueOwnerRepository.findByEmailOrMobile(
-      normalizedEmail,
-      normalizedMobile,
-    );
-    if (existingVenueOwner) {
-      throw new ApiError(409, "Venue owner already exists for this email or mobile");
-    }
+    await ensureVenueOwnerProfileUniqueness({
+      email: normalizedEmail,
+      mobile: normalizedMobile,
+    });
 
     const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
     const isPrivilegedCreator = options?.requestedByRole
@@ -613,6 +669,13 @@ export const venueOwnerService = {
     }
 
     const normalizedPayload = normalizePayload(payload, { partial: true });
+    const previousApprovalStatus = normalizeText(existingVenueOwner.approvalStatus);
+
+    await ensureVenueOwnerProfileUniqueness({
+      email: String(normalizedPayload.email ?? existingVenueOwner.email ?? ""),
+      mobile: String(normalizedPayload.mobile ?? existingVenueOwner.mobile ?? ""),
+      excludeVenueOwnerId: venueOwnerId,
+    });
 
     const [linkedUser] = await Promise.all([
       ensureVenueOwnerUserAccount({
@@ -635,12 +698,22 @@ export const venueOwnerService = {
 
     await syncVenueOwnerUserStatus(venueOwner.toObject(), normalizedPayload);
 
+    const nextApprovalStatus = normalizeText(venueOwner.approvalStatus);
+    if (previousApprovalStatus === "pending" && nextApprovalStatus === "active") {
+      await notifyVenueOwnerApprovalActivated(venueOwner.toObject());
+    }
+
     return venueOwnerRepository.findById(venueOwnerId);
   },
   updateMyVenueOwnerProfile: async (authUser: { id: string }, payload: Record<string, unknown>) => {
     const venueOwnerByUserId = await venueOwnerRepository.findByUserId(authUser.id);
     if (venueOwnerByUserId) {
       const normalizedPayload = normalizePayload(payload, { partial: true });
+      await ensureVenueOwnerProfileUniqueness({
+        email: String(normalizedPayload.email ?? venueOwnerByUserId.email ?? ""),
+        mobile: String(normalizedPayload.mobile ?? venueOwnerByUserId.mobile ?? ""),
+        excludeVenueOwnerId: String(venueOwnerByUserId._id),
+      });
 
       if (Array.isArray(normalizedPayload.venuePackages)) {
         const packageCount = normalizedPayload.venuePackages.length;
@@ -723,6 +796,11 @@ export const venueOwnerService = {
     }
 
     const normalizedPayload = normalizePayload(payload, { partial: true });
+    await ensureVenueOwnerProfileUniqueness({
+      email: String(normalizedPayload.email ?? venueOwner.email ?? ""),
+      mobile: String(normalizedPayload.mobile ?? venueOwner.mobile ?? ""),
+      excludeVenueOwnerId: String(venueOwner._id),
+    });
 
     if (Array.isArray(normalizedPayload.venuePackages)) {
       const packageCount = normalizedPayload.venuePackages.length;

@@ -9,6 +9,8 @@ const baseVendorPackageSchema = z.object({
   inclusions: z.array(z.string()).default([]),
   features: z.array(z.string()).default([]),
   coverImage: z.string().optional().default(""),
+  portfolioImages: z.array(z.url()).max(4).optional().default([]),
+  videoLinks: z.array(z.url()).max(4).optional().default([]),
   isActive: z.boolean().optional(),
 });
 

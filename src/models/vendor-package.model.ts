@@ -10,6 +10,8 @@ const vendorPackageSchema = new Schema(
     inclusions: { type: [String], default: [] },
     features: { type: [String], default: [] },
     coverImage: { type: String, default: "" },
+    portfolioImages: { type: [String], default: [] },
+    videoLinks: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true },

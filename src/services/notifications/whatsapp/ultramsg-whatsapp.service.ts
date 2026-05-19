@@ -5,7 +5,12 @@ import { ApiError } from "../../../utils/api-error";
 type UltraMsgSendMessagePayload = {
   to: string;
   body: string;
-  context: "auth_otp" | "booking_confirmation" | "vendor_lead_notification";
+  context:
+    | "auth_otp"
+    | "booking_confirmation"
+    | "vendor_lead_notification"
+    | "vendor_approval"
+    | "venue_owner_approval";
 };
 
 type UltraMsgApiResponse = {

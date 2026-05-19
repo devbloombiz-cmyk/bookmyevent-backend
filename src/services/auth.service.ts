@@ -12,6 +12,8 @@ import { userRepository } from "../repositories/user.repository";
 import { otpNotificationService } from "./notifications/otp/otp-notification.service";
 import { hasPermission, resolveAccessProfileForUser } from "./pbac.service";
 import { durationToFutureDate } from "../utils/duration";
+import { vendorRepository } from "../repositories/vendor.repository";
+import { venueOwnerRepository } from "../repositories/venue-owner.repository";
 
 function hashTokenValue(token: string) {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -227,6 +229,35 @@ function maskIdentifier(identifier: string) {
   return `${source.slice(0, 2)}***${source.slice(-2)}`;
 }
 
+async function resolvePendingApprovalMessage(user: {
+  id: string;
+  role: UserRole;
+  email?: string;
+  mobile?: string;
+}) {
+  if (user.role === "vendor") {
+    const vendor =
+      (await vendorRepository.findByUserId(user.id)) ||
+      (await vendorRepository.findByEmailOrMobile(user.email, user.mobile));
+
+    if (vendor?.approvalStatus === "pending") {
+      return "Vendor account is pending admin approval. Please wait for approval before login.";
+    }
+  }
+
+  if (user.role === "venue_owner") {
+    const venueOwner =
+      (await venueOwnerRepository.findByUserId(user.id)) ||
+      (await venueOwnerRepository.findByEmailOrMobile(user.email, user.mobile));
+
+    if (venueOwner?.approvalStatus === "pending") {
+      return "Venue owner account is pending admin approval. Please wait for approval before login.";
+    }
+  }
+
+  return "Account is deactivated";
+}
+
 async function resolveOtpTarget(payload: {
   identifier?: string;
   email?: string;
@@ -248,7 +279,13 @@ async function resolveOtpTarget(payload: {
     }
 
     if (!existingUser.isActive) {
-      throw new ApiError(403, "Account is deactivated");
+      const message = await resolvePendingApprovalMessage({
+        id: existingUser.id,
+        role: existingUser.role,
+        email: existingUser.email ?? undefined,
+        mobile: existingUser.mobile ?? undefined,
+      });
+      throw new ApiError(403, message);
     }
 
     const accessProfile = await resolveAccessProfileForUser(existingUser.id);
@@ -335,7 +372,13 @@ async function loginByRequiredPermission(payload: {
   }
 
   if (!user.isActive) {
-    throw new ApiError(403, "Account is deactivated");
+    const message = await resolvePendingApprovalMessage({
+      id: user.id,
+      role: user.role,
+      email: user.email ?? undefined,
+      mobile: user.mobile ?? undefined,
+    });
+    throw new ApiError(403, message);
   }
 
   if (!user.passwordHash) {
@@ -548,7 +591,13 @@ async function verifyLoginOtp(
       : await ensureCustomerFromMobile(target.mobile || ""));
 
   if (!user.isActive) {
-    throw new ApiError(403, "Account is deactivated");
+    const message = await resolvePendingApprovalMessage({
+      id: user.id,
+      role: user.role,
+      email: user.email ?? undefined,
+      mobile: user.mobile ?? undefined,
+    });
+    throw new ApiError(403, message);
   }
 
   logger.info(

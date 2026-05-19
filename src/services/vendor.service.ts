@@ -9,6 +9,8 @@ import type { UserRole } from "../types/domain";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { subscriptionService } from "./subscription.service";
 import { subscriptionRepository } from "../repositories/subscription.repository";
+import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
+import { logger } from "../config/logger";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const normalizeUrl = (value: unknown) => {
@@ -143,6 +145,13 @@ const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
     userRepository.findByEmail(email),
   ]);
 
+  if (userByMobile && userByEmail && userByMobile.id !== userByEmail.id) {
+    throw new ApiError(
+      409,
+      "Email and mobile belong to different accounts. Please use a unique email/mobile combination.",
+    );
+  }
+
   const existingUser = userByMobile ?? userByEmail;
   if (existingUser) {
     const updatedUser = await userRepository.updateById(existingUser.id, {
@@ -215,16 +224,83 @@ const syncVendorUserStatus = async (
         ? vendorRecord.isActive
         : true;
 
-  const shouldBeActive = isVendorActive && approvalStatus !== "disabled";
+        const shouldBeActive = isVendorActive && approvalStatus === "active";
 
   await userRepository.updateById(user.id, {
     isActive: shouldBeActive,
   });
 };
 
+const ensureVendorProfileUniqueness = async (options: {
+  email?: string;
+  mobile?: string;
+  excludeVendorId?: string;
+}) => {
+  const normalizedEmail = normalizeText(options.email).toLowerCase();
+  const normalizedMobile = normalizeText(options.mobile);
+  const existingVendor = await vendorRepository.findByEmailOrMobile(normalizedEmail, normalizedMobile);
+
+  if (!existingVendor) {
+    return;
+  }
+
+  if (options.excludeVendorId && String(existingVendor._id) === options.excludeVendorId) {
+    return;
+  }
+
+  throw new ApiError(409, "Vendor already exists for this email or mobile");
+};
+
+const notifyVendorApprovalActivated = async (vendorRecord: Record<string, unknown>) => {
+  const mobile = normalizeText(vendorRecord.mobile);
+  if (!mobile || !ultramsgWhatsappService.isEnabled()) {
+    return;
+  }
+
+  const businessName = normalizeText(vendorRecord.businessName) || "your vendor profile";
+  const message = `BookMyEvent update: ${businessName} is approved. You can now login at /login and continue onboarding.`;
+
+  try {
+    await ultramsgWhatsappService.sendMessage({
+      to: mobile,
+      body: message,
+      context: "vendor_approval",
+    });
+  } catch (error) {
+    logger.warn(
+      {
+        vendorId: String(vendorRecord._id || ""),
+        mobile,
+        error,
+      },
+      "Unable to send vendor approval WhatsApp notification",
+    );
+  }
+};
+
 const hasActiveProSubscription = async (vendorId: string) => {
   const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", [vendorId]);
   return activeProRows.length > 0;
+};
+
+const toDistrictOnlyServiceZones = (district: unknown) => {
+  const normalizedDistrict = normalizeText(district);
+  return normalizedDistrict ? [normalizedDistrict] : [];
+};
+
+const enforceVendorServiceZonePolicy = (
+  normalizedPayload: Record<string, unknown>,
+  options: { allowMultiple: boolean; fallbackDistrict?: unknown },
+) => {
+  if (options.allowMultiple) {
+    return;
+  }
+
+  const districtSource = "district" in normalizedPayload
+    ? normalizedPayload.district
+    : options.fallbackDistrict;
+
+  normalizedPayload.serviceZones = toDistrictOnlyServiceZones(districtSource);
 };
 
 export const vendorService = {
@@ -238,6 +314,10 @@ export const vendorService = {
     // New vendors are always onboarded before subscription. Persist only cover image at this stage.
     normalizedPayload.portfolioImages = [];
     normalizedPayload.videoLinks = [];
+    enforceVendorServiceZonePolicy(normalizedPayload, {
+      allowMultiple: false,
+      fallbackDistrict: normalizedPayload.district,
+    });
 
     const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
     const isPrivilegedCreator = options?.requestedByRole
@@ -252,6 +332,11 @@ export const vendorService = {
       }
     }
 
+    await ensureVendorProfileUniqueness({
+      email: String(normalizedPayload.email || ""),
+      mobile: String(normalizedPayload.mobile || ""),
+    });
+
     const [linkedUser] = await Promise.all([
       ensureVendorUserAccount(normalizedPayload),
       syncLocationIfPresent(normalizedPayload),
@@ -262,6 +347,7 @@ export const vendorService = {
     }
 
     const vendor = await vendorRepository.create(normalizedPayload);
+    await syncVendorUserStatus(vendor.toObject(), normalizedPayload);
 
     const portfolioImages = Array.isArray(normalizedPayload.portfolioImages)
       ? normalizedPayload.portfolioImages.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
@@ -350,6 +436,20 @@ export const vendorService = {
     const vendorByUserId = await vendorRepository.findByUserId(authUser.id);
     if (vendorByUserId) {
       const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
+      await ensureVendorProfileUniqueness({
+        email: String(normalizedPayload.email ?? vendorByUserId.email ?? ""),
+        mobile: String(normalizedPayload.mobile ?? vendorByUserId.mobile ?? ""),
+        excludeVendorId: String(vendorByUserId._id),
+      });
+      const isSubscribedPro = await hasActiveProSubscription(String(vendorByUserId._id));
+
+      enforceVendorServiceZonePolicy(normalizedPayload, {
+        allowMultiple: isSubscribedPro,
+        fallbackDistrict:
+          "district" in normalizedPayload
+            ? normalizedPayload.district
+            : vendorByUserId.district,
+      });
 
       if (Array.isArray(normalizedPayload.portfolioImages)) {
         await subscriptionService.assertWithinLimit(
@@ -407,6 +507,17 @@ export const vendorService = {
     }
 
     const normalizedPayload = buildNormalizedVendorPayload(payload, { partial: true });
+    await ensureVendorProfileUniqueness({
+      email: String(normalizedPayload.email ?? vendor.email ?? ""),
+      mobile: String(normalizedPayload.mobile ?? vendor.mobile ?? ""),
+      excludeVendorId: String(vendor._id),
+    });
+    const isSubscribedPro = await hasActiveProSubscription(String(vendor._id));
+
+    enforceVendorServiceZonePolicy(normalizedPayload, {
+      allowMultiple: isSubscribedPro,
+      fallbackDistrict: "district" in normalizedPayload ? normalizedPayload.district : vendor.district,
+    });
 
     if (Array.isArray(normalizedPayload.portfolioImages)) {
       await subscriptionService.assertWithinLimit(
@@ -455,6 +566,14 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
+    const previousApprovalStatus = normalizeText(existingVendor.approvalStatus);
+
+    await ensureVendorProfileUniqueness({
+      email: String(normalizedPayload.email ?? existingVendor.email ?? ""),
+      mobile: String(normalizedPayload.mobile ?? existingVendor.mobile ?? ""),
+      excludeVendorId: vendorId,
+    });
+
     const [linkedUser] = await Promise.all([
       ensureVendorUserAccount(normalizedPayload),
       syncLocationIfPresent(normalizedPayload),
@@ -465,6 +584,12 @@ export const vendorService = {
     }
 
     const allowExtendedMedia = await hasActiveProSubscription(vendorId);
+    enforceVendorServiceZonePolicy(normalizedPayload, {
+      allowMultiple: allowExtendedMedia,
+      fallbackDistrict:
+        "district" in normalizedPayload ? normalizedPayload.district : existingVendor.district,
+    });
+
     if (!allowExtendedMedia) {
       if ("portfolioImages" in normalizedPayload) {
         normalizedPayload.portfolioImages = [];
@@ -502,6 +627,11 @@ export const vendorService = {
     }
 
     await syncVendorUserStatus(existingVendor.toObject(), normalizedPayload);
+
+    const nextApprovalStatus = normalizeText(persistedVendor.approvalStatus);
+    if (previousApprovalStatus === "pending" && nextApprovalStatus === "active") {
+      await notifyVendorApprovalActivated(persistedVendor.toObject());
+    }
 
     return persistedVendor;
   },

@@ -3,10 +3,14 @@ import { env } from "./env";
 import { logger } from "./logger";
 
 let redisClient: Redis | null = null;
+let missingRedisUrlWarned = false;
 
 export function getRedisClient() {
   if (!env.REDIS_URL) {
-    logger.warn("REDIS_URL not set; Redis client not initialized.");
+    if (!missingRedisUrlWarned) {
+      logger.warn("REDIS_URL not set; Redis client not initialized.");
+      missingRedisUrlWarned = true;
+    }
     return null;
   }
 

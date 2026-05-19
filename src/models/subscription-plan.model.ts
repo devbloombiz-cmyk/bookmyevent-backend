@@ -26,7 +26,6 @@ const subscriptionPlanSchema = new Schema(
   { timestamps: true },
 );
 
-subscriptionPlanSchema.index({ code: 1 }, { unique: true });
 subscriptionPlanSchema.index({ isActive: 1 });
 
 export const SubscriptionPlanModel = model("SubscriptionPlan", subscriptionPlanSchema);

@@ -38,6 +38,5 @@ const accountSubscriptionSchema = new Schema(
 );
 
 accountSubscriptionSchema.index({ actorType: 1, actorId: 1, createdAt: -1 });
-accountSubscriptionSchema.index({ paymentReference: 1 });
 
 export const AccountSubscriptionModel = model("AccountSubscription", accountSubscriptionSchema);

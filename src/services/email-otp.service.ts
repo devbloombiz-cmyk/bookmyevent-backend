@@ -32,19 +32,33 @@ function extractErrorDetails(error: unknown) {
 
   const responseObject =
     typeof candidate.response === "object" && candidate.response !== null
-      ? (candidate.response as { status?: number; statusCode?: number; data?: unknown; text?: string })
+      ? (candidate.response as {
+          status?: number;
+          statusCode?: number;
+          data?: unknown;
+          text?: string;
+        })
       : undefined;
 
   const cause =
     typeof candidate.cause === "object" && candidate.cause !== null
-      ? (candidate.cause as { message?: string; code?: string; status?: number; statusCode?: number })
+      ? (candidate.cause as {
+          message?: string;
+          code?: string;
+          status?: number;
+          statusCode?: number;
+        })
       : undefined;
 
   return {
     name: candidate.name ?? "Error",
     message: candidate.message ?? "Unknown error",
     code: candidate.code,
-    status: candidate.status ?? candidate.statusCode ?? responseObject?.status ?? responseObject?.statusCode,
+    status:
+      candidate.status ??
+      candidate.statusCode ??
+      responseObject?.status ??
+      responseObject?.statusCode,
     command: candidate.command,
     responseCode: candidate.responseCode,
     response: typeof candidate.response === "string" ? candidate.response : undefined,
@@ -208,7 +222,6 @@ export const emailOtpService = {
       logger.warn(
         {
           email: payload.toEmail,
-          otpCode: payload.otpCode,
           expiryMinutes: payload.expiryMinutes,
         },
         "OTP dev fallback enabled. Using logged OTP instead of provider delivery",

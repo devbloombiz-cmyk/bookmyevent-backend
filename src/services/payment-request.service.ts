@@ -13,7 +13,6 @@ import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
 import { activityTimelineService } from "./activity-timeline.service";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
-import { bookingNotificationService } from "./notifications/booking/booking-notification.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -140,7 +139,9 @@ async function ensureBookingAccess(bookingId: string, authUser: AuthUser) {
 
 async function resolveBookingCustomerContact(booking: Record<string, unknown>) {
   const lead = booking.leadId ? await leadRepository.findById(String(booking.leadId)) : null;
-  const customer = booking.customerId ? await userRepository.findById(String(booking.customerId)) : null;
+  const customer = booking.customerId
+    ? await userRepository.findById(String(booking.customerId))
+    : null;
 
   const customerName =
     String(booking.customerName || "").trim() ||
@@ -311,7 +312,10 @@ async function applyPaymentToBooking(bookingId: string, amountPaidDelta: number)
   }
 
   const totalAmount = Number(booking.amount || 0);
-  const nextPaid = Math.max(0, Number(booking.paidAmount || booking.advancePaid || 0) + amountPaidDelta);
+  const nextPaid = Math.max(
+    0,
+    Number(booking.paidAmount || booking.advancePaid || 0) + amountPaidDelta,
+  );
   const nextDue = Math.max(0, totalAmount - nextPaid);
 
   const updated = await bookingRepository.updateById(bookingId, {
@@ -320,7 +324,10 @@ async function applyPaymentToBooking(bookingId: string, amountPaidDelta: number)
     dueAmount: nextDue,
     paymentStatus: nextDue <= 0 ? "paid" : "pending",
     settlementStatus: Number(booking.pendingSettlement || totalAmount) <= 0 ? "SETTLED" : "PENDING",
-    pendingSettlement: Math.max(0, Number(booking.vendorAmount || totalAmount) - Number(booking.settledAmount || 0)),
+    pendingSettlement: Math.max(
+      0,
+      Number(booking.vendorAmount || totalAmount) - Number(booking.settledAmount || 0),
+    ),
   });
 
   return updated;
@@ -372,7 +379,9 @@ export const paymentRequestService = {
         customerEmail,
         amount: payload.advanceAmount,
         referenceId,
-        expiryEpochSeconds: paymentExpiryDate ? Math.floor(paymentExpiryDate.getTime() / 1000) : undefined,
+        expiryEpochSeconds: paymentExpiryDate
+          ? Math.floor(paymentExpiryDate.getTime() / 1000)
+          : undefined,
         notes: {
           leadId: String(lead._id),
           paymentType: "ADVANCE",
@@ -388,7 +397,10 @@ export const paymentRequestService = {
         },
         "Razorpay payment link creation failed",
       );
-      throw new ApiError(502, "Unable to generate payment link. Please verify payment configuration and retry.");
+      throw new ApiError(
+        502,
+        "Unable to generate payment link. Please verify payment configuration and retry.",
+      );
     }
 
     if (!paymentLink.id || !paymentLink.shortUrl) {
@@ -528,7 +540,8 @@ export const paymentRequestService = {
 
     if (
       String((booking as { customerName?: unknown }).customerName || "").trim() !== customerName ||
-      String((booking as { customerMobile?: unknown }).customerMobile || "").trim() !== customerMobile ||
+      String((booking as { customerMobile?: unknown }).customerMobile || "").trim() !==
+        customerMobile ||
       String((booking as { customerEmail?: unknown }).customerEmail || "").trim() !== customerEmail
     ) {
       await bookingRepository.updateById(String(booking._id), {
@@ -767,7 +780,8 @@ export const paymentRequestService = {
 
     if (
       String((booking as { customerName?: unknown }).customerName || "").trim() !== customerName ||
-      String((booking as { customerMobile?: unknown }).customerMobile || "").trim() !== effectiveCustomerMobile ||
+      String((booking as { customerMobile?: unknown }).customerMobile || "").trim() !==
+        effectiveCustomerMobile ||
       String((booking as { customerEmail?: unknown }).customerEmail || "").trim() !== customerEmail
     ) {
       await bookingRepository.updateById(String(booking._id), {
@@ -789,7 +803,9 @@ export const paymentRequestService = {
         customerEmail,
         amount: payload.amount,
         referenceId,
-        expiryEpochSeconds: paymentExpiryDate ? Math.floor(paymentExpiryDate.getTime() / 1000) : undefined,
+        expiryEpochSeconds: paymentExpiryDate
+          ? Math.floor(paymentExpiryDate.getTime() / 1000)
+          : undefined,
         notes: {
           bookingId: String(booking._id),
           paymentType,
@@ -805,7 +821,10 @@ export const paymentRequestService = {
         },
         "Razorpay balance payment link creation failed",
       );
-      throw new ApiError(502, "Unable to generate payment link. Please verify payment configuration and retry.");
+      throw new ApiError(
+        502,
+        "Unable to generate payment link. Please verify payment configuration and retry.",
+      );
     }
 
     if (!paymentLink.id || !paymentLink.shortUrl) {
@@ -881,9 +900,15 @@ export const paymentRequestService = {
       throw new ApiError(401, "Invalid webhook signature");
     }
 
-    const expectedDigest = crypto.createHmac("sha256", credentials.webhookSecret).update(rawBody).digest();
+    const expectedDigest = crypto
+      .createHmac("sha256", credentials.webhookSecret)
+      .update(rawBody)
+      .digest();
     const providedDigest = Buffer.from(providedSignature, "hex");
-    if (providedDigest.length !== expectedDigest.length || !crypto.timingSafeEqual(providedDigest, expectedDigest)) {
+    if (
+      providedDigest.length !== expectedDigest.length ||
+      !crypto.timingSafeEqual(providedDigest, expectedDigest)
+    ) {
       throw new ApiError(401, "Invalid webhook signature");
     }
 
@@ -907,11 +932,15 @@ export const paymentRequestService = {
       const rootPayload = payload.payload || {};
       const paymentLinkEntity =
         rootPayload.payment_link && typeof rootPayload.payment_link === "object"
-          ? ((rootPayload.payment_link as Record<string, unknown>).entity as Record<string, unknown> | undefined)
+          ? ((rootPayload.payment_link as Record<string, unknown>).entity as
+              | Record<string, unknown>
+              | undefined)
           : undefined;
       const paymentEntity =
         rootPayload.payment && typeof rootPayload.payment === "object"
-          ? ((rootPayload.payment as Record<string, unknown>).entity as Record<string, unknown> | undefined)
+          ? ((rootPayload.payment as Record<string, unknown>).entity as
+              | Record<string, unknown>
+              | undefined)
           : undefined;
 
       return String(
@@ -937,11 +966,15 @@ export const paymentRequestService = {
     const rootPayload = payload.payload || {};
     const paymentLinkEntity =
       rootPayload.payment_link && typeof rootPayload.payment_link === "object"
-        ? ((rootPayload.payment_link as Record<string, unknown>).entity as Record<string, unknown> | undefined)
+        ? ((rootPayload.payment_link as Record<string, unknown>).entity as
+            | Record<string, unknown>
+            | undefined)
         : undefined;
     const paymentEntity =
       rootPayload.payment && typeof rootPayload.payment === "object"
-        ? ((rootPayload.payment as Record<string, unknown>).entity as Record<string, unknown> | undefined)
+        ? ((rootPayload.payment as Record<string, unknown>).entity as
+            | Record<string, unknown>
+            | undefined)
         : undefined;
 
     const referenceId = String(
@@ -976,10 +1009,13 @@ export const paymentRequestService = {
     if (!paymentRequest) {
       const noteLeadId = String(paymentNotes.leadId || "").trim();
       const noteBookingId = String(paymentNotes.bookingId || "").trim();
-      const notePaymentType = String(paymentNotes.paymentType || "").trim().toUpperCase();
+      const notePaymentType = String(paymentNotes.paymentType || "")
+        .trim()
+        .toUpperCase();
 
       if (noteLeadId && notePaymentType === "ADVANCE") {
-        paymentRequest = await paymentRequestRepository.findLatestPendingAdvanceByLeadId(noteLeadId);
+        paymentRequest =
+          await paymentRequestRepository.findLatestPendingAdvanceByLeadId(noteLeadId);
       }
 
       if (!paymentRequest && noteBookingId) {

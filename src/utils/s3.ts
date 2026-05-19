@@ -13,6 +13,30 @@ const mimeTypeToExtensions: Record<string, string[]> = {
   "image/webp": [".webp"],
 };
 
+function hasMatchingImageMagicBytes(buffer: Buffer, mimeType: string): boolean {
+  if (mimeType === "image/jpeg") {
+    return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+
+  if (mimeType === "image/png") {
+    const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return (
+      buffer.length >= pngSignature.length &&
+      pngSignature.every((byte, index) => buffer[index] === byte)
+    );
+  }
+
+  if (mimeType === "image/webp") {
+    if (buffer.length < 12) {
+      return false;
+    }
+
+    return buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
+  }
+
+  return false;
+}
+
 export const MAX_UPLOAD_FILE_SIZE_BYTES = 2 * 1024 * 1024;
 export const S3_UPLOAD_FOLDERS = ["vendors", "services", "locations", "venues"] as const;
 
@@ -81,7 +105,10 @@ type UploadResult = {
   bucket: string;
 };
 
-export async function uploadToS3(file: Express.Multer.File, folder: S3UploadFolder): Promise<UploadResult> {
+export async function uploadToS3(
+  file: Express.Multer.File,
+  folder: S3UploadFolder,
+): Promise<UploadResult> {
   const extension = path.extname(file.originalname || "").toLowerCase();
 
   if (!isAllowedImageMimeType(file.mimetype) || !isAllowedImageExtension(extension)) {
@@ -94,6 +121,10 @@ export async function uploadToS3(file: Express.Multer.File, folder: S3UploadFold
 
   if (file.size > MAX_UPLOAD_FILE_SIZE_BYTES) {
     throw new ApiError(400, "File size must be 2MB or smaller");
+  }
+
+  if (!hasMatchingImageMagicBytes(file.buffer, file.mimetype)) {
+    throw new ApiError(400, "Invalid image content");
   }
 
   let bucketName: string;

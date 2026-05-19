@@ -12,6 +12,11 @@ import { hashPassword } from "../utils/password";
 import { userRepository } from "../repositories/user.repository";
 import { invalidatePermissionCache, resolveAccessProfileForUser } from "./pbac.service";
 import { UserRole } from "../types/domain";
+import { UserModel } from "../models/user.model";
+import { VendorModel } from "../models/vendor.model";
+import { VenueOwnerModel } from "../models/venue-owner.model";
+import { BookingModel } from "../models/booking.model";
+import { LeadModel } from "../models/lead.model";
 
 type SubAdminRole = Extract<UserRole, "vendor_admin" | "accounts_admin">;
 
@@ -78,7 +83,9 @@ function resolvePermissionKeysFromCollections(
   collections: readonly AccessCollectionKey[],
 ): PermissionKey[] {
   return Array.from(
-    new Set(collections.flatMap((collection) => AdminAccessCollectionPermissionMap[collection] ?? [])),
+    new Set(
+      collections.flatMap((collection) => AdminAccessCollectionPermissionMap[collection] ?? []),
+    ),
   );
 }
 
@@ -180,6 +187,76 @@ export const userService = {
     }));
   },
 
+  getAdminDashboardOverview: async () => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      totalUsers,
+      totalVendors,
+      totalVenueOwners,
+      pendingVendorApprovals,
+      pendingVenueApprovals,
+      todayBookings,
+      revenueAggregate,
+      pendingSettlementAggregate,
+      activeLeads,
+    ] = await Promise.all([
+      UserModel.countDocuments({ isActive: true }),
+      VendorModel.countDocuments({ isActive: true }),
+      VenueOwnerModel.countDocuments({ isActive: true }),
+      VendorModel.countDocuments({ approvalStatus: "pending", isActive: true }),
+      VenueOwnerModel.countDocuments({ approvalStatus: "pending", isActive: true }),
+      BookingModel.countDocuments({ createdAt: { $gte: startOfToday } }),
+      BookingModel.aggregate<{ _id: null; total: number }>([
+        {
+          $match: {
+            paymentStatus: "paid",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $ifNull: ["$paidAmount", 0] } },
+          },
+        },
+      ]),
+      BookingModel.aggregate<{ _id: null; total: number }>([
+        {
+          $match: {
+            settlementStatus: "PENDING",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: { $ifNull: ["$pendingSettlement", 0] } },
+          },
+        },
+      ]),
+      LeadModel.countDocuments({
+        status: {
+          $in: ["NEW", "CONTACTED", "PAYMENT_DONE"],
+        },
+      }),
+    ]);
+
+    const totalRevenueInr = revenueAggregate[0]?.total ?? 0;
+    const pendingSettlementInr = pendingSettlementAggregate[0]?.total ?? 0;
+
+    return {
+      totalUsers,
+      totalVendors,
+      totalVenueOwners,
+      pendingVendorApprovals,
+      pendingVenueApprovals,
+      todayBookings,
+      totalRevenueInr,
+      pendingSettlementInr,
+      activeLeads,
+    };
+  },
+
   createSubAdmin: async (payload: {
     name: string;
     mobile: string;
@@ -189,7 +266,8 @@ export const userService = {
     permissionKeys?: string[];
   }) => {
     const normalizedMobile = payload.mobile.trim();
-    const normalizedEmail = (payload.email?.trim().toLowerCase() || fallbackEmailFromMobile(normalizedMobile));
+    const normalizedEmail =
+      payload.email?.trim().toLowerCase() || fallbackEmailFromMobile(normalizedMobile);
 
     const mobileExists = await userRepository.findByMobile(normalizedMobile);
     if (mobileExists) {

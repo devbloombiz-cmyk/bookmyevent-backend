@@ -17,6 +17,12 @@ export const getMyProfileSchema = z.object({
   params: z.object({}).default({}),
 });
 
+export const adminDashboardOverviewSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
+  params: z.object({}).default({}),
+});
+
 export const updateMyProfileSchema = z.object({
   body: z
     .object({

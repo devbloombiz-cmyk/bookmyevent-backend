@@ -1,33 +1,51 @@
 import { z } from "zod";
 
-const optionalUrl = z.union([z.url(), z.literal("")]).optional().default("");
+const optionalUrl = z.union([z.url(), z.literal("")]).optional();
 
-const subCategorySchema = z.object({
+const subCategoryCreateSchema = z.object({
   name: z.string().min(2),
   displayName: z.string().optional(),
   image: optionalUrl,
   isActive: z.boolean().default(true),
 });
 
-const categoryBodySchema = z.object({
+const subCategoryUpdateBodySchema = z.object({
+  name: z.string().min(2).optional(),
+  displayName: z.string().optional(),
+  image: optionalUrl,
+  isActive: z.boolean().optional(),
+});
+
+const categoryCreateBodySchema = z.object({
   name: z.string().min(2),
   displayName: z.string().min(2).optional(),
   description: z.string().optional().default(""),
   icon: z.string().optional().default(""),
   coverImage: optionalUrl,
   isFeatured: z.boolean().optional().default(false),
-  subCategories: z.array(subCategorySchema).default([]),
+  subCategories: z.array(subCategoryCreateSchema).default([]),
+  isActive: z.boolean().optional().default(true),
+});
+
+const categoryUpdateBodySchema = z.object({
+  name: z.string().min(2).optional(),
+  displayName: z.string().min(2).optional(),
+  description: z.string().optional(),
+  icon: z.string().optional(),
+  coverImage: optionalUrl,
+  isFeatured: z.boolean().optional(),
+  subCategories: z.array(subCategoryUpdateBodySchema).optional(),
   isActive: z.boolean().optional(),
 });
 
 export const categoryCreateSchema = z.object({
-  body: categoryBodySchema,
+  body: categoryCreateBodySchema,
   query: z.object({}),
   params: z.object({}),
 });
 
 export const categoryUpdateSchema = z.object({
-  body: categoryBodySchema.partial(),
+  body: categoryUpdateBodySchema,
   query: z.object({}),
   params: z.object({
     categoryId: z.string().min(1),
@@ -44,7 +62,7 @@ export const categoryDeleteSchema = z.object({
 
 export const subCategoryBulkCreateSchema = z.object({
   body: z.object({
-    subCategories: z.array(subCategorySchema).min(1),
+    subCategories: z.array(subCategoryCreateSchema).min(1),
   }),
   query: z.object({}),
   params: z.object({
@@ -53,7 +71,7 @@ export const subCategoryBulkCreateSchema = z.object({
 });
 
 export const subCategoryUpdateSchema = z.object({
-  body: subCategorySchema.partial(),
+  body: subCategoryUpdateBodySchema,
   query: z.object({}),
   params: z.object({
     categoryId: z.string().min(1),

@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
+  adminDashboardOverviewSchema,
   createSubAdminSchema,
   getMyProfileSchema,
   listSystemUsersSchema,
@@ -13,8 +14,26 @@ import {
 
 const userRouter = Router();
 
-userRouter.get("/me", requireAuth, validateRequest(getMyProfileSchema), userController.getMyProfile);
-userRouter.patch("/me", requireAuth, validateRequest(updateMyProfileSchema), userController.updateMyProfile);
+userRouter.get(
+  "/me",
+  requireAuth,
+  validateRequest(getMyProfileSchema),
+  userController.getMyProfile,
+);
+userRouter.patch(
+  "/me",
+  requireAuth,
+  validateRequest(updateMyProfileSchema),
+  userController.updateMyProfile,
+);
+
+userRouter.get(
+  "/admin-dashboard-overview",
+  requireAuth,
+  authorize(PermissionKeys.WorkspaceAdminAccess),
+  validateRequest(adminDashboardOverviewSchema),
+  userController.getAdminDashboardOverview,
+);
 
 userRouter.get(
   "/system-users",

@@ -67,6 +67,7 @@ export const listVendorPackageSchema = z.object({
   body: z.object({}).default({}),
   query: z.object({
     vendorId: z.string().optional(),
+    ownerType: z.enum(["vendor", "venue_owner"]).optional(),
     includeInactive: z
       .enum(["true", "false"])
       .optional()

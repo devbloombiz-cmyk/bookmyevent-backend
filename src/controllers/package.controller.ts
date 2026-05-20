@@ -14,8 +14,17 @@ export const packageController = {
   }),
   listVendorPackages: asyncHandler(async (req, res) => {
     const vendorId = typeof req.query.vendorId === "string" ? req.query.vendorId : undefined;
+    const ownerType =
+      req.query.ownerType === "vendor" || req.query.ownerType === "venue_owner"
+        ? req.query.ownerType
+        : undefined;
     const includeInactive = req.query.includeInactive === "true";
-    const packages = await packageService.listVendorPackages(vendorId, includeInactive, req.authUser);
+    const packages = await packageService.listVendorPackages(
+      vendorId,
+      includeInactive,
+      req.authUser,
+      ownerType,
+    );
     return sendSuccess(res, "Vendor packages fetched", { packages });
   }),
   updateVendorPackage: asyncHandler(async (req, res) => {

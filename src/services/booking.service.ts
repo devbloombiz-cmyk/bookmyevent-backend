@@ -6,6 +6,7 @@ import { ApiError } from "../utils/api-error";
 import {
   resolveVendorIdForAuthUser,
   resolveVendorIdForScopedUser,
+  resolveVenueOwnerIdForAuthUser,
 } from "./vendor-identity.service";
 import { bookingNotificationService } from "./notifications/booking/booking-notification.service";
 import { logger } from "../config/logger";
@@ -106,6 +107,80 @@ async function hydrateBookingCustomerDetails(booking: Record<string, unknown>) {
   };
 }
 
+async function filterBookingsByScopedOwnership(
+  bookings: Array<Record<string, unknown>>,
+  authUser: AuthUser,
+) {
+  const leadIds = bookings
+    .map((item) => String(item.leadId || ""))
+    .filter((value) => Boolean(value));
+  const uniqueLeadIds = Array.from(new Set(leadIds));
+  const leadRows = uniqueLeadIds.length ? await leadRepository.findByIds(uniqueLeadIds) : [];
+  const leadById = new Map(leadRows.map((lead) => [String(lead._id), lead]));
+
+  if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+    const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+    return bookings.filter((booking) => {
+      const leadId = String(booking.leadId || "");
+      if (!leadId) {
+        return false;
+      }
+
+      const lead = leadById.get(leadId);
+      if (!lead) {
+        return false;
+      }
+
+      return String(lead.venueOwnerId || "") === venueOwnerId;
+    });
+  }
+
+  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
+    return bookings.filter((booking) => {
+      const leadId = String(booking.leadId || "");
+      if (!leadId) {
+        return true;
+      }
+
+      const lead = leadById.get(leadId);
+      if (!lead) {
+        return true;
+      }
+
+      return !lead.venueOwnerId;
+    });
+  }
+
+  return bookings;
+}
+
+async function assertScopedBookingAccess(existing: Record<string, unknown>, authUser: AuthUser) {
+  if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+    const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+    const leadId = String(existing.leadId || "");
+    if (!leadId) {
+      throw new ApiError(403, "You are not allowed to access this booking");
+    }
+
+    const lead = await leadRepository.findById(leadId);
+    if (!lead || String(lead.venueOwnerId || "") !== venueOwnerId) {
+      throw new ApiError(403, "You are not allowed to access this booking");
+    }
+  }
+
+  if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
+    const leadId = String(existing.leadId || "");
+    if (!leadId) {
+      return;
+    }
+
+    const lead = await leadRepository.findById(leadId);
+    if (lead?.venueOwnerId) {
+      throw new ApiError(403, "You are not allowed to access this booking");
+    }
+  }
+}
+
 export const bookingService = {
   createBooking: async (payload: Record<string, unknown>, authUser: AuthUser) => {
     let booking;
@@ -182,11 +257,12 @@ export const bookingService = {
       bookings = await bookingRepository.findAll();
     }
 
-    return Promise.all(
-      bookings.map((booking) =>
-        hydrateBookingCustomerDetails(booking.toObject() as Record<string, unknown>),
-      ),
+    bookings = await filterBookingsByScopedOwnership(
+      bookings.map((item) => item.toObject() as Record<string, unknown>),
+      authUser,
     );
+
+    return Promise.all(bookings.map((booking) => hydrateBookingCustomerDetails(booking)));
   },
   updateBooking: async (
     bookingId: string,
@@ -208,6 +284,8 @@ export const bookingService = {
       if (String(existing.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to update this booking");
       }
+
+      await assertScopedBookingAccess(existing.toObject() as Record<string, unknown>, authUser);
     }
 
     if (typeof payload.bookingStatus === "string") {

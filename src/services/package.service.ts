@@ -164,6 +164,7 @@ export const packageService = {
     vendorId: string | undefined,
     includeInactive = false,
     authUser?: AuthUser,
+    ownerType?: "vendor" | "venue_owner",
   ) => {
     if (
       authUser &&
@@ -195,6 +196,30 @@ export const packageService = {
       return packageRepository.listVendorPackagesForVendorActor(ownVendorId, true);
     }
 
+    if (ownerType === "vendor") {
+      if (!vendorId) {
+        return [];
+      }
+
+      return packageRepository.listVendorPackagesForVendorActor(vendorId, includeInactive);
+    }
+
+    if (ownerType === "venue_owner") {
+      if (!vendorId) {
+        return [];
+      }
+
+      return packageRepository
+        .listVendorPackages(vendorId, includeInactive)
+        .then((rows) =>
+          rows.filter(
+            (item) =>
+              String((item as { ownerType?: unknown }).ownerType || "") === "venue_owner" &&
+              Boolean((item as { venueOwnerId?: unknown }).venueOwnerId),
+          ),
+        );
+    }
+
     return packageRepository.listVendorPackages(vendorId, includeInactive);
   },
   updateVendorPackage: async (
@@ -215,6 +240,18 @@ export const packageService = {
     if (authUser.permissions.includes(PermissionKeys.PackageVendorUpdateOwn) && hasOwnScope) {
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existing.vendorId) !== ownVendorId) {
+        throw new ApiError(403, "You are not allowed to update this package");
+      }
+
+      if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+        const ownVenueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+        if (
+          String((existing as { ownerType?: unknown }).ownerType || "") !== "venue_owner" ||
+          String((existing as { venueOwnerId?: unknown }).venueOwnerId || "") !== ownVenueOwnerId
+        ) {
+          throw new ApiError(403, "You are not allowed to update this package");
+        }
+      } else if (String((existing as { ownerType?: unknown }).ownerType || "vendor") !== "vendor") {
         throw new ApiError(403, "You are not allowed to update this package");
       }
     }
@@ -239,6 +276,18 @@ export const packageService = {
 
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existing.vendorId) !== ownVendorId) {
+        throw new ApiError(403, "You are not allowed to delete this package");
+      }
+
+      if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+        const ownVenueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+        if (
+          String((existing as { ownerType?: unknown }).ownerType || "") !== "venue_owner" ||
+          String((existing as { venueOwnerId?: unknown }).venueOwnerId || "") !== ownVenueOwnerId
+        ) {
+          throw new ApiError(403, "You are not allowed to delete this package");
+        }
+      } else if (String((existing as { ownerType?: unknown }).ownerType || "vendor") !== "vendor") {
         throw new ApiError(403, "You are not allowed to delete this package");
       }
     }

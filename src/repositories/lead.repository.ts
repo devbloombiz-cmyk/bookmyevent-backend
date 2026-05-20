@@ -36,6 +36,12 @@ export const leadRepository = {
     }
     return LeadModel.find(query).sort({ createdAt: -1 });
   },
+  findByIds: (leadIds: string[]) =>
+    LeadModel.find({
+      _id: {
+        $in: leadIds,
+      },
+    }),
   findById: (leadId: string) => LeadModel.findById(leadId),
   updateById: (leadId: string, payload: Record<string, unknown>) =>
     LeadModel.findByIdAndUpdate(leadId, payload, { returnDocument: "after" }),

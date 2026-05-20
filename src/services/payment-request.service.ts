@@ -10,7 +10,10 @@ import { userRepository } from "../repositories/user.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
-import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
+import {
+  resolveVendorIdForScopedUser,
+  resolveVenueOwnerIdForAuthUser,
+} from "./vendor-identity.service";
 import { activityTimelineService } from "./activity-timeline.service";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
 
@@ -119,6 +122,17 @@ async function ensureLeadAccess(leadId: string, authUser: AuthUser) {
     if (String(lead.vendorId) !== vendorId) {
       throw new ApiError(403, "You are not allowed to access this lead");
     }
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+      const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+      if (String(lead.venueOwnerId || "") !== venueOwnerId) {
+        throw new ApiError(403, "You are not allowed to access this lead");
+      }
+    }
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) && lead.venueOwnerId) {
+      throw new ApiError(403, "You are not allowed to access this lead");
+    }
   }
 
   return lead;
@@ -136,6 +150,19 @@ async function ensureBookingAccess(bookingId: string, authUser: AuthUser) {
   ) {
     const vendorId = await resolveVendorIdForScopedUser(authUser);
     if (String(booking.vendorId) !== vendorId) {
+      throw new ApiError(403, "You are not allowed to access this booking");
+    }
+
+    const lead = booking.leadId ? await leadRepository.findById(String(booking.leadId)) : null;
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+      const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+      if (!lead || String(lead.venueOwnerId || "") !== venueOwnerId) {
+        throw new ApiError(403, "You are not allowed to access this booking");
+      }
+    }
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) && lead?.venueOwnerId) {
       throw new ApiError(403, "You are not allowed to access this booking");
     }
   }

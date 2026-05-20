@@ -41,6 +41,7 @@ const vendorSchema = new Schema(
       default: "base_package",
     },
     pricingAmount: { type: Number, default: 0, min: 0 },
+    registrationSource: { type: String, enum: ["admin", "public"], default: "public" },
     approvalStatus: {
       type: String,
       enum: ["pending", "active", "disabled"],
@@ -63,6 +64,7 @@ vendorSchema.index({ city: 1 });
 vendorSchema.index({ subCategory: 1 });
 vendorSchema.index({ isVerified: 1 });
 vendorSchema.index({ approvalStatus: 1, isActive: 1 });
+vendorSchema.index({ registrationSource: 1 });
 vendorSchema.index({ mobile: 1 });
 vendorSchema.index({ email: 1 });
 vendorSchema.index({ profileType: 1 });

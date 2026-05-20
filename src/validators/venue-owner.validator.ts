@@ -96,7 +96,10 @@ const foodAndCateringSchema = z
       });
     }
 
-    if ((value.foodPriceType ?? "") === "PRICE_PER_PLATE" && (!value.pricePerPlate || value.pricePerPlate <= 0)) {
+    if (
+      (value.foodPriceType ?? "") === "PRICE_PER_PLATE" &&
+      (!value.pricePerPlate || value.pricePerPlate <= 0)
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["pricePerPlate"],
@@ -116,7 +119,10 @@ const foodAndCateringSchema = z
 const venueFoodOptionSchema = z.object({
   packageName: z.string().min(1),
   foodTypes: z.array(z.string()).optional().default([]),
-  priceType: z.enum(["included_in_package", "price_per_plate", "extra_addon"]).optional().default("included_in_package"),
+  priceType: z
+    .enum(["included_in_package", "price_per_plate", "extra_addon"])
+    .optional()
+    .default("included_in_package"),
   pricePerPlate: z.number().min(0).optional().default(0),
   addonPrice: z.number().min(0).optional().default(0),
   menuItems: z.array(z.string()).optional().default([]),
@@ -135,135 +141,143 @@ const timeValueSchema = z
     message: "Time must be in HH:MM format.",
   });
 
-const venuePackageSchema = z.object({
-  packageName: z.string().min(1),
-  basePrice: z.number().min(0).optional().default(0),
-  price: z.number().min(0),
-  priceType: z
-    .union([canonicalPriceTypeEnum, legacyPriceTypeEnum])
-    .optional()
-    .default("PER_EVENT")
-    .transform((value) => toCanonicalPriceType(value)),
-  description: z.string().optional().default(""),
-  descriptionHighlights: z.array(z.string().max(160)).optional().default([]),
-  coverImage: z.string().optional().default(""),
-  portfolioImages: z.array(z.string()).max(4).optional().default([]),
-  videoLinks: z.array(z.url()).max(4).optional().default([]),
-  venueStartTime: timeValueSchema,
-  venueEndTime: timeValueSchema,
-  inclusions: z.array(z.string()).optional().default([]),
-  minGuestCapacity: z.number().int().min(0).optional().default(0),
-  seatingCapacity: z.number().int().min(0).optional().default(0),
-  maxGuestCapacity: z.number().int().min(0).optional().default(0),
-  parkingVehicleCount: z.number().int().min(0).optional().default(0),
-  roomsAvailableCount: z.number().int().min(0).optional().default(0),
-  includedServices: z.array(z.string()).optional().default([]),
-  includedServicesDetailed: z.array(serviceItemSchema).optional().default([]),
-  additionalServices: z.array(z.string()).optional().default([]),
-  foodAndCatering: foodAndCateringSchema.optional(),
-  customInclusions: z.array(customInclusionSchema).optional().default([]),
-  foodOptions: z.array(venueFoodOptionSchema).optional().default([]),
-  foodMenus: z.array(venueFoodMenuSchema).optional().default([]),
-  welcomeDrinkIncluded: z.boolean().optional().default(false),
-  dessertIncluded: z.boolean().optional().default(false),
-  customMenuAvailable: z.boolean().optional().default(false),
-  isActive: z.boolean().optional().default(true),
-}).superRefine((pkg, ctx) => {
-  if (pkg.venueStartTime && pkg.venueEndTime && pkg.venueStartTime >= pkg.venueEndTime) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["venueEndTime"],
-      message: "Venue end time must be later than start time.",
-    });
-  }
+const venuePackageSchema = z
+  .object({
+    packageName: z.string().min(1),
+    basePrice: z.number().min(0).optional().default(0),
+    price: z.number().min(0),
+    priceType: z
+      .union([canonicalPriceTypeEnum, legacyPriceTypeEnum])
+      .optional()
+      .default("PER_EVENT")
+      .transform((value) => toCanonicalPriceType(value)),
+    description: z.string().optional().default(""),
+    descriptionHighlights: z.array(z.string().max(160)).optional().default([]),
+    coverImage: z.string().optional().default(""),
+    portfolioImages: z.array(z.string()).max(4).optional().default([]),
+    videoLinks: z.array(z.url()).max(4).optional().default([]),
+    venueStartTime: timeValueSchema,
+    venueEndTime: timeValueSchema,
+    inclusions: z.array(z.string()).optional().default([]),
+    minGuestCapacity: z.number().int().min(0).optional().default(0),
+    seatingCapacity: z.number().int().min(0).optional().default(0),
+    maxGuestCapacity: z.number().int().min(0).optional().default(0),
+    parkingVehicleCount: z.number().int().min(0).optional().default(0),
+    roomsAvailableCount: z.number().int().min(0).optional().default(0),
+    includedServices: z.array(z.string()).optional().default([]),
+    includedServicesDetailed: z.array(serviceItemSchema).optional().default([]),
+    additionalServices: z.array(z.string()).optional().default([]),
+    foodAndCatering: foodAndCateringSchema.optional(),
+    customInclusions: z.array(customInclusionSchema).optional().default([]),
+    foodOptions: z.array(venueFoodOptionSchema).optional().default([]),
+    foodMenus: z.array(venueFoodMenuSchema).optional().default([]),
+    welcomeDrinkIncluded: z.boolean().optional().default(false),
+    dessertIncluded: z.boolean().optional().default(false),
+    customMenuAvailable: z.boolean().optional().default(false),
+    isActive: z.boolean().optional().default(true),
+  })
+  .superRefine((pkg, ctx) => {
+    if (pkg.venueStartTime && pkg.venueEndTime && pkg.venueStartTime >= pkg.venueEndTime) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["venueEndTime"],
+        message: "Venue end time must be later than start time.",
+      });
+    }
 
-  if (pkg.maxGuestCapacity > 0 && pkg.minGuestCapacity > pkg.maxGuestCapacity) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["minGuestCapacity"],
-      message: "Minimum guest capacity cannot exceed maximum guest capacity.",
-    });
-  }
+    if (pkg.maxGuestCapacity > 0 && pkg.minGuestCapacity > pkg.maxGuestCapacity) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["minGuestCapacity"],
+        message: "Minimum guest capacity cannot exceed maximum guest capacity.",
+      });
+    }
 
-  if (pkg.seatingCapacity > 0 && pkg.minGuestCapacity > pkg.seatingCapacity) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["minGuestCapacity"],
-      message: "Minimum guest capacity cannot exceed seating capacity.",
-    });
-  }
+    if (pkg.seatingCapacity > 0 && pkg.minGuestCapacity > pkg.seatingCapacity) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["minGuestCapacity"],
+        message: "Minimum guest capacity cannot exceed seating capacity.",
+      });
+    }
 
-  if (pkg.maxGuestCapacity > 0 && pkg.seatingCapacity > pkg.maxGuestCapacity) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["seatingCapacity"],
-      message: "Seating capacity cannot exceed maximum guest capacity.",
-    });
-  }
-});
+    if (pkg.maxGuestCapacity > 0 && pkg.seatingCapacity > pkg.maxGuestCapacity) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["seatingCapacity"],
+        message: "Seating capacity cannot exceed maximum guest capacity.",
+      });
+    }
+  });
 
 export const createVenueOwnerSchema = z.object({
-  body: z.object({
-    businessName: z.string().min(2),
-    ownerName: z.string().min(2),
-    email: z.email(),
-    mobile: z.string().min(8).max(20),
-    state: z.string().optional().default(""),
-    district: z.string().optional().default(""),
-    city: z.string().min(2),
-    locationDisplayName: z.string().optional().default(""),
-    addressLine: z.string().optional().default(""),
-    venueType: z.union([legacyVenueTypeEnum, canonicalVenueTypeEnum]).optional(),
-    venueTypes: z.array(canonicalVenueTypeEnum).optional().default([]),
-    guestCapacity: z
-      .object({
-        minGuests: z.number().int().min(0),
-        maxGuests: z.number().int().min(0),
-      })
-      .optional(),
-    parkingAvailable: z.boolean().optional().default(false),
-    parkingCapacity: z.number().int().min(0).optional().default(0),
-    roomsAvailable: z.boolean().optional().default(false),
-    roomCount: z.number().int().min(0).optional().default(0),
-    description: z.string().optional().default(""),
-    approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("pending"),
-    isActive: z.boolean().optional().default(true),
-    profileImage: z.url().optional(),
-    profileImages: z.array(z.url()).optional().default([]),
-    venuePackages: z.array(venuePackageSchema).optional().default([]),
-  }).superRefine((payload, ctx) => {
-    if (!payload.venueType && !payload.venueTypes.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["venueTypes"],
-        message: "Either venueType or venueTypes is required.",
-      });
-    }
+  body: z
+    .object({
+      businessName: z.string().min(2),
+      ownerName: z.string().min(2),
+      email: z.email(),
+      mobile: z.string().min(8).max(20),
+      state: z.string().optional().default(""),
+      district: z.string().optional().default(""),
+      city: z.string().min(2),
+      locationDisplayName: z.string().optional().default(""),
+      addressLine: z.string().optional().default(""),
+      venueType: z.union([legacyVenueTypeEnum, canonicalVenueTypeEnum]).optional(),
+      venueTypes: z.array(canonicalVenueTypeEnum).optional().default([]),
+      guestCapacity: z
+        .object({
+          minGuests: z.number().int().min(0),
+          maxGuests: z.number().int().min(0),
+        })
+        .optional(),
+      parkingAvailable: z.boolean().optional().default(false),
+      parkingCapacity: z.number().int().min(0).optional().default(0),
+      roomsAvailable: z.boolean().optional().default(false),
+      roomCount: z.number().int().min(0).optional().default(0),
+      description: z.string().optional().default(""),
+      approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("active"),
+      isActive: z.boolean().optional().default(true),
+      profileImage: z.url().optional(),
+      profileImages: z.array(z.url()).optional().default([]),
+      venuePackages: z.array(venuePackageSchema).optional().default([]),
+    })
+    .superRefine((payload, ctx) => {
+      if (!payload.venueType && !payload.venueTypes.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["venueTypes"],
+          message: "Either venueType or venueTypes is required.",
+        });
+      }
 
-    if (payload.guestCapacity && payload.guestCapacity.maxGuests > 0 && payload.guestCapacity.minGuests > payload.guestCapacity.maxGuests) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["guestCapacity", "minGuests"],
-        message: "Minimum guests cannot exceed maximum guests.",
-      });
-    }
+      if (
+        payload.guestCapacity &&
+        payload.guestCapacity.maxGuests > 0 &&
+        payload.guestCapacity.minGuests > payload.guestCapacity.maxGuests
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["guestCapacity", "minGuests"],
+          message: "Minimum guests cannot exceed maximum guests.",
+        });
+      }
 
-    if (payload.parkingAvailable && (!payload.parkingCapacity || payload.parkingCapacity <= 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["parkingCapacity"],
-        message: "Parking capacity is required when parking is enabled.",
-      });
-    }
+      if (payload.parkingAvailable && (!payload.parkingCapacity || payload.parkingCapacity <= 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["parkingCapacity"],
+          message: "Parking capacity is required when parking is enabled.",
+        });
+      }
 
-    if (payload.roomsAvailable && (!payload.roomCount || payload.roomCount <= 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["roomCount"],
-        message: "Room count is required when rooms are enabled.",
-      });
-    }
-  }),
+      if (payload.roomsAvailable && (!payload.roomCount || payload.roomCount <= 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["roomCount"],
+          message: "Room count is required when rooms are enabled.",
+        });
+      }
+    }),
   query: z.object({}),
   params: z.object({}),
 });
@@ -301,7 +315,11 @@ export const updateVenueOwnerSchema = z.object({
     })
     .refine((payload) => Object.keys(payload).length > 0, "At least one field is required")
     .superRefine((payload, ctx) => {
-      if (payload.guestCapacity && payload.guestCapacity.maxGuests > 0 && payload.guestCapacity.minGuests > payload.guestCapacity.maxGuests) {
+      if (
+        payload.guestCapacity &&
+        payload.guestCapacity.maxGuests > 0 &&
+        payload.guestCapacity.minGuests > payload.guestCapacity.maxGuests
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["guestCapacity", "minGuests"],
@@ -309,7 +327,10 @@ export const updateVenueOwnerSchema = z.object({
         });
       }
 
-      if (payload.parkingAvailable === true && (!payload.parkingCapacity || payload.parkingCapacity <= 0)) {
+      if (
+        payload.parkingAvailable === true &&
+        (!payload.parkingCapacity || payload.parkingCapacity <= 0)
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["parkingCapacity"],
@@ -345,6 +366,7 @@ export const listVenueOwnerSchema = z.object({
     venueType: z.string().min(2).optional(),
     search: z.string().min(1).optional(),
     approvalStatus: z.enum(["pending", "active", "disabled"]).optional(),
+    registrationSource: z.enum(["admin", "public"]).optional(),
     includeInactive: z
       .enum(["true", "false"])
       .optional()

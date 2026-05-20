@@ -73,3 +73,15 @@ export const bookingBalanceSendSchema = z.object({
     paymentRequestId: z.string().min(1),
   }),
 });
+
+export const bookingManualPaymentSchema = z.object({
+  body: z.object({
+    amount: z.number().positive(),
+    paymentType: z.enum(["BALANCE", "EXTRA"]).optional().default("BALANCE"),
+    notes: z.string().optional(),
+  }),
+  query: z.object({}),
+  params: z.object({
+    bookingId: z.string().min(1),
+  }),
+});

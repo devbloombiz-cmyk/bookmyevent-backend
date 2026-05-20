@@ -69,6 +69,13 @@ export const vendorRepository = {
       }
     }
 
+    if (typeof filters.registrationSource === "string" && filters.registrationSource.trim()) {
+      const source = filters.registrationSource.trim();
+      if (source === "admin" || source === "public") {
+        query.registrationSource = source;
+      }
+    }
+
     if (typeof filters.search === "string" && filters.search.trim()) {
       const searchRegex = new RegExp(escapeRegExp(filters.search.trim()), "i");
       query.$or = [

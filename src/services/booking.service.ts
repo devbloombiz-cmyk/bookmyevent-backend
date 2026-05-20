@@ -3,7 +3,10 @@ import { availabilityRepository } from "../repositories/availability.repository"
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
-import { resolveVendorIdForAuthUser, resolveVendorIdForScopedUser } from "./vendor-identity.service";
+import {
+  resolveVendorIdForAuthUser,
+  resolveVendorIdForScopedUser,
+} from "./vendor-identity.service";
 import { bookingNotificationService } from "./notifications/booking/booking-notification.service";
 import { logger } from "../config/logger";
 import { paymentRequestService } from "./payment-request.service";
@@ -56,7 +59,9 @@ function extractFromMessage(message: string | undefined, label: string) {
 
 async function hydrateBookingCustomerDetails(booking: Record<string, unknown>) {
   const lead = booking.leadId ? await leadRepository.findById(String(booking.leadId)) : null;
-  const customer = booking.customerId ? await userRepository.findById(String(booking.customerId)) : null;
+  const customer = booking.customerId
+    ? await userRepository.findById(String(booking.customerId))
+    : null;
 
   const customerName =
     String(booking.customerName || "").trim() ||
@@ -136,7 +141,11 @@ export const bookingService = {
 
     if (booking) {
       const amount = Number((booking as { amount?: unknown }).amount || 0);
-      const paidAmount = Number((booking as { paidAmount?: unknown; advancePaid?: unknown }).paidAmount || (booking as { advancePaid?: unknown }).advancePaid || 0);
+      const paidAmount = Number(
+        (booking as { paidAmount?: unknown; advancePaid?: unknown }).paidAmount ||
+          (booking as { advancePaid?: unknown }).advancePaid ||
+          0,
+      );
       const dueAmount = Math.max(0, amount - paidAmount);
 
       await bookingRepository.updateById(String(booking.id), {
@@ -174,10 +183,16 @@ export const bookingService = {
     }
 
     return Promise.all(
-      bookings.map((booking) => hydrateBookingCustomerDetails(booking.toObject() as Record<string, unknown>)),
+      bookings.map((booking) =>
+        hydrateBookingCustomerDetails(booking.toObject() as Record<string, unknown>),
+      ),
     );
   },
-  updateBooking: async (bookingId: string, payload: Record<string, unknown>, authUser: AuthUser) => {
+  updateBooking: async (
+    bookingId: string,
+    payload: Record<string, unknown>,
+    authUser: AuthUser,
+  ) => {
     const existing = await bookingRepository.findById(bookingId);
     if (!existing) {
       throw new ApiError(404, "Booking not found");
@@ -262,5 +277,16 @@ export const bookingService = {
       payload,
       authUser,
     );
+  },
+  recordManualPayment: async (
+    bookingId: string,
+    payload: {
+      amount: number;
+      paymentType?: "BALANCE" | "EXTRA";
+      notes?: string;
+    },
+    authUser: AuthUser,
+  ) => {
+    return paymentRequestService.recordManualPaymentForBooking(bookingId, payload, authUser);
   },
 };

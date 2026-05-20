@@ -47,14 +47,18 @@ export const venueOwnerRepository = {
       query.approvalStatus = filters.approvalStatus.trim();
     }
 
+    if (typeof filters.registrationSource === "string" && filters.registrationSource.trim()) {
+      const source = filters.registrationSource.trim();
+      if (source === "admin" || source === "public") {
+        query.registrationSource = source;
+      }
+    }
+
     if (typeof filters.venueType === "string" && filters.venueType.trim()) {
       const requestedType = filters.venueType.trim();
       const canonicalMatch = canonicalToLegacy[requestedType] ?? [];
       if (canonicalMatch.length) {
-        query.$or = [
-          { venueTypes: requestedType },
-          { venueType: { $in: canonicalMatch } },
-        ];
+        query.$or = [{ venueTypes: requestedType }, { venueType: { $in: canonicalMatch } }];
       } else {
         query.venueType = new RegExp(`^${escapeRegExp(requestedType)}$`, "i");
       }
@@ -85,7 +89,8 @@ export const venueOwnerRepository = {
       }
     }
 
-    const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(200, filters.limit)) : 60;
+    const limit =
+      typeof filters.limit === "number" ? Math.max(1, Math.min(200, filters.limit)) : 60;
 
     return VenueOwnerModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },

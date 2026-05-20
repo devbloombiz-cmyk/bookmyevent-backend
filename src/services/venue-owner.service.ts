@@ -66,12 +66,15 @@ const listFields = (value: unknown) =>
     : [];
 
 const normalizeFoodOption = (option: unknown) => {
-  const src = typeof option === "object" && option !== null ? (option as Record<string, unknown>) : {};
+  const src =
+    typeof option === "object" && option !== null ? (option as Record<string, unknown>) : {};
   return {
     packageName: normalizeText(src.packageName),
     foodTypes: listFields(src.foodTypes),
     priceType:
-      src.priceType === "price_per_plate" || src.priceType === "extra_addon" || src.priceType === "included_in_package"
+      src.priceType === "price_per_plate" ||
+      src.priceType === "extra_addon" ||
+      src.priceType === "included_in_package"
         ? src.priceType
         : "included_in_package",
     pricePerPlate: typeof src.pricePerPlate === "number" ? Math.max(0, src.pricePerPlate) : 0,
@@ -84,7 +87,8 @@ const normalizeIncludedServiceItems = (value: unknown) => {
   const asObjects = Array.isArray(value)
     ? value
         .map((item) => {
-          const src = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : null;
+          const src =
+            typeof item === "object" && item !== null ? (item as Record<string, unknown>) : null;
           if (!src) {
             return null;
           }
@@ -100,7 +104,9 @@ const normalizeIncludedServiceItems = (value: unknown) => {
             description: normalizeText(src.description),
           };
         })
-        .filter((item): item is { enabled: boolean; label: string; description: string } => Boolean(item))
+        .filter((item): item is { enabled: boolean; label: string; description: string } =>
+          Boolean(item),
+        )
     : [];
 
   if (asObjects.length) {
@@ -118,7 +124,8 @@ const normalizeCustomInclusions = (value: unknown) =>
   Array.isArray(value)
     ? value
         .map((item) => {
-          const src = typeof item === "object" && item !== null ? (item as Record<string, unknown>) : null;
+          const src =
+            typeof item === "object" && item !== null ? (item as Record<string, unknown>) : null;
           if (!src) {
             return null;
           }
@@ -175,7 +182,8 @@ const normalizeFoodAndCatering = (value: unknown, fallback: Record<string, unkno
           ? Math.max(0, additionalFoodOptions.maxPlateCount)
           : 0,
       welcomeDrinkIncluded:
-        additionalFoodOptions.welcomeDrinkIncluded === true || fallback.welcomeDrinkIncluded === true,
+        additionalFoodOptions.welcomeDrinkIncluded === true ||
+        fallback.welcomeDrinkIncluded === true,
       dessertIncluded:
         additionalFoodOptions.dessertIncluded === true || fallback.dessertIncluded === true,
       customMenuAvailable:
@@ -246,12 +254,17 @@ const uniqueList = (value: unknown) => Array.from(new Set(listFields(value)));
 
 const normalizeVenuePackage = (pkg: unknown) => {
   const src = typeof pkg === "object" && pkg !== null ? (pkg as Record<string, unknown>) : {};
-  const minGuestCapacity = typeof src.minGuestCapacity === "number" ? Math.max(0, src.minGuestCapacity) : 0;
-  const seatingCapacity = typeof src.seatingCapacity === "number" ? Math.max(0, src.seatingCapacity) : 0;
-  const maxGuestCapacity = typeof src.maxGuestCapacity === "number" ? Math.max(0, src.maxGuestCapacity) : 0;
+  const minGuestCapacity =
+    typeof src.minGuestCapacity === "number" ? Math.max(0, src.minGuestCapacity) : 0;
+  const seatingCapacity =
+    typeof src.seatingCapacity === "number" ? Math.max(0, src.seatingCapacity) : 0;
+  const maxGuestCapacity =
+    typeof src.maxGuestCapacity === "number" ? Math.max(0, src.maxGuestCapacity) : 0;
 
-  const cappedMinGuestCapacity = seatingCapacity > 0 ? Math.min(minGuestCapacity, seatingCapacity) : minGuestCapacity;
-  const cappedSeatingCapacity = maxGuestCapacity > 0 ? Math.min(seatingCapacity, maxGuestCapacity) : seatingCapacity;
+  const cappedMinGuestCapacity =
+    seatingCapacity > 0 ? Math.min(minGuestCapacity, seatingCapacity) : minGuestCapacity;
+  const cappedSeatingCapacity =
+    maxGuestCapacity > 0 ? Math.min(seatingCapacity, maxGuestCapacity) : seatingCapacity;
 
   const includedServicesDetailed = normalizeIncludedServiceItems(src.includedServicesDetailed);
   const enabledServiceLabels = includedServicesDetailed
@@ -286,9 +299,13 @@ const normalizeVenuePackage = (pkg: unknown) => {
     minGuestCapacity: cappedMinGuestCapacity,
     seatingCapacity: cappedSeatingCapacity,
     maxGuestCapacity: maxGuestCapacity,
-    parkingVehicleCount: typeof src.parkingVehicleCount === "number" ? Math.max(0, src.parkingVehicleCount) : 0,
-    roomsAvailableCount: typeof src.roomsAvailableCount === "number" ? Math.max(0, src.roomsAvailableCount) : 0,
-    includedServices: enabledServiceLabels.length ? enabledServiceLabels : listFields(src.includedServices),
+    parkingVehicleCount:
+      typeof src.parkingVehicleCount === "number" ? Math.max(0, src.parkingVehicleCount) : 0,
+    roomsAvailableCount:
+      typeof src.roomsAvailableCount === "number" ? Math.max(0, src.roomsAvailableCount) : 0,
+    includedServices: enabledServiceLabels.length
+      ? enabledServiceLabels
+      : listFields(src.includedServices),
     includedServicesDetailed,
     additionalServices: listFields(src.additionalServices),
     foodAndCatering: normalizeFoodAndCatering(src.foodAndCatering, src),
@@ -386,7 +403,8 @@ const normalizePayload = (payload: Record<string, unknown>, options: { partial: 
   }
 
   if (!options.partial || "roomCount" in payload) {
-    normalized.roomCount = typeof payload.roomCount === "number" ? Math.max(0, payload.roomCount) : 0;
+    normalized.roomCount =
+      typeof payload.roomCount === "number" ? Math.max(0, payload.roomCount) : 0;
   }
 
   const hasLocationDisplayField = "locationDisplayName" in normalized;
@@ -394,7 +412,10 @@ const normalizePayload = (payload: Record<string, unknown>, options: { partial: 
   const hasDistrict = "district" in normalized;
   const hasCity = "city" in normalized;
 
-  if ((!hasLocationDisplayField || !normalizeText(normalized.locationDisplayName)) && (hasState || hasDistrict || hasCity)) {
+  if (
+    (!hasLocationDisplayField || !normalizeText(normalized.locationDisplayName)) &&
+    (hasState || hasDistrict || hasCity)
+  ) {
     const parts = [normalized.city, normalized.district, normalized.state].filter(
       (item): item is string => typeof item === "string" && item.length > 0,
     );
@@ -411,7 +432,8 @@ const ensureVenueOwnerUserAccount = async (payload: Record<string, unknown>) => 
     return null;
   }
 
-  const name = normalizeText(payload.ownerName) || normalizeText(payload.businessName) || "Venue Owner";
+  const name =
+    normalizeText(payload.ownerName) || normalizeText(payload.businessName) || "Venue Owner";
 
   const [userByMobile, userByEmail] = await Promise.all([
     userRepository.findByMobile(mobile),
@@ -578,6 +600,11 @@ export const venueOwnerService = {
 
     normalizedPayload.registrationSource = isPrivilegedCreator ? "admin" : "public";
 
+    if (isPrivilegedCreator) {
+      normalizedPayload.approvalStatus = "active";
+      normalizedPayload.isActive = true;
+    }
+
     if (!isPrivilegedCreator) {
       normalizedPayload.approvalStatus = "pending";
       normalizedPayload.isActive = true;
@@ -636,7 +663,9 @@ export const venueOwnerService = {
       });
     }
 
-    const activeProRows = await subscriptionRepository.findActiveProByActorIds("venue_owner", [String(venueOwner._id)]);
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("venue_owner", [
+      String(venueOwner._id),
+    ]);
     const isSubscribedPro = activeProRows.length > 0;
 
     return {
@@ -654,7 +683,9 @@ export const venueOwnerService = {
       throw new ApiError(404, "Venue owner not found");
     }
 
-    const activeProRows = await subscriptionRepository.findActiveProByActorIds("venue_owner", [venueOwnerId]);
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("venue_owner", [
+      venueOwnerId,
+    ]);
     const isSubscribedPro = activeProRows.length > 0;
 
     return {

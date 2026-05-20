@@ -154,6 +154,7 @@ export const vendorListSchema = z.object({
       .enum(["pending", "active", "disabled"])
       .optional()
       .transform((value) => value ?? undefined),
+    registrationSource: z.enum(["admin", "public"]).optional(),
     isVerified: z
       .enum(["true", "false"])
       .optional()

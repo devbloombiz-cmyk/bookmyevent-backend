@@ -9,6 +9,7 @@ import {
   bookingBalanceSendSchema,
   bookingCreateSchema,
   bookingListSchema,
+  bookingManualPaymentSchema,
   bookingUpdateSchema,
 } from "../validators/booking.validator";
 
@@ -25,7 +26,12 @@ bookingRouter.get(
   validateRequest(bookingListSchema),
   bookingController.listBookings,
 );
-bookingRouter.post("/", requireAuth, validateRequest(bookingCreateSchema), bookingController.createBooking);
+bookingRouter.post(
+  "/",
+  requireAuth,
+  validateRequest(bookingCreateSchema),
+  bookingController.createBooking,
+);
 bookingRouter.put(
   "/:bookingId",
   requireAuth,
@@ -46,6 +52,13 @@ bookingRouter.post(
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingBalanceSendSchema),
   bookingController.sendBalancePaymentLink,
+);
+bookingRouter.post(
+  "/:bookingId/manual-payment",
+  requireAuth,
+  authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
+  validateRequest(bookingManualPaymentSchema),
+  bookingController.recordManualPayment,
 );
 
 export { bookingRouter };

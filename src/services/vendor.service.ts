@@ -122,7 +122,10 @@ const buildNormalizedVendorPayload = (
   const hasState = "state" in normalized;
   const hasDistrict = "district" in normalized;
   const hasCity = "city" in normalized;
-  if ((!hasLocationDisplayField || !normalizeText(normalized.locationDisplayName)) && (hasState || hasDistrict || hasCity)) {
+  if (
+    (!hasLocationDisplayField || !normalizeText(normalized.locationDisplayName)) &&
+    (hasState || hasDistrict || hasCity)
+  ) {
     const parts = [normalized.city, normalized.district, normalized.state].filter(
       (item): item is string => typeof item === "string" && item.length > 0,
     );
@@ -224,7 +227,7 @@ const syncVendorUserStatus = async (
         ? vendorRecord.isActive
         : true;
 
-        const shouldBeActive = isVendorActive && approvalStatus === "active";
+  const shouldBeActive = isVendorActive && approvalStatus === "active";
 
   await userRepository.updateById(user.id, {
     isActive: shouldBeActive,
@@ -238,7 +241,10 @@ const ensureVendorProfileUniqueness = async (options: {
 }) => {
   const normalizedEmail = normalizeText(options.email).toLowerCase();
   const normalizedMobile = normalizeText(options.mobile);
-  const existingVendor = await vendorRepository.findByEmailOrMobile(normalizedEmail, normalizedMobile);
+  const existingVendor = await vendorRepository.findByEmailOrMobile(
+    normalizedEmail,
+    normalizedMobile,
+  );
 
   if (!existingVendor) {
     return;
@@ -296,9 +302,8 @@ const enforceVendorServiceZonePolicy = (
     return;
   }
 
-  const districtSource = "district" in normalizedPayload
-    ? normalizedPayload.district
-    : options.fallbackDistrict;
+  const districtSource =
+    "district" in normalizedPayload ? normalizedPayload.district : options.fallbackDistrict;
 
   normalizedPayload.serviceZones = toDistrictOnlyServiceZones(districtSource);
 };
@@ -323,6 +328,13 @@ export const vendorService = {
     const isPrivilegedCreator = options?.requestedByRole
       ? privilegedCreatorRoles.includes(options.requestedByRole)
       : false;
+
+    normalizedPayload.registrationSource = isPrivilegedCreator ? "admin" : "public";
+
+    if (isPrivilegedCreator) {
+      normalizedPayload.approvalStatus = "active";
+      normalizedPayload.isActive = true;
+    }
 
     if (!isPrivilegedCreator) {
       normalizedPayload.approvalStatus = "pending";
@@ -350,7 +362,9 @@ export const vendorService = {
     await syncVendorUserStatus(vendor.toObject(), normalizedPayload);
 
     const portfolioImages = Array.isArray(normalizedPayload.portfolioImages)
-      ? normalizedPayload.portfolioImages.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      ? normalizedPayload.portfolioImages.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        )
       : [];
 
     await galleryService.syncVendorPortfolioGalleryItems({
@@ -395,7 +409,9 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
-    const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", [vendorId]);
+    const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", [
+      vendorId,
+    ]);
     const isSubscribedPro = activeProRows.length > 0;
     const row = vendor.toObject() as Record<string, unknown>;
 
@@ -446,9 +462,7 @@ export const vendorService = {
       enforceVendorServiceZonePolicy(normalizedPayload, {
         allowMultiple: isSubscribedPro,
         fallbackDistrict:
-          "district" in normalizedPayload
-            ? normalizedPayload.district
-            : vendorByUserId.district,
+          "district" in normalizedPayload ? normalizedPayload.district : vendorByUserId.district,
       });
 
       if (Array.isArray(normalizedPayload.portfolioImages)) {
@@ -469,7 +483,10 @@ export const vendorService = {
 
       await syncLocationIfPresent(normalizedPayload);
 
-      const updatedVendor = await vendorRepository.updateById(String(vendorByUserId._id), normalizedPayload);
+      const updatedVendor = await vendorRepository.updateById(
+        String(vendorByUserId._id),
+        normalizedPayload,
+      );
       if (!updatedVendor) {
         throw new ApiError(404, "Vendor not found");
       }
@@ -516,7 +533,8 @@ export const vendorService = {
 
     enforceVendorServiceZonePolicy(normalizedPayload, {
       allowMultiple: isSubscribedPro,
-      fallbackDistrict: "district" in normalizedPayload ? normalizedPayload.district : vendor.district,
+      fallbackDistrict:
+        "district" in normalizedPayload ? normalizedPayload.district : vendor.district,
     });
 
     if (Array.isArray(normalizedPayload.portfolioImages)) {
@@ -604,7 +622,10 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
-    if (Array.isArray(normalizedPayload.portfolioImages) && normalizedPayload.portfolioImages.length > 0) {
+    if (
+      Array.isArray(normalizedPayload.portfolioImages) &&
+      normalizedPayload.portfolioImages.length > 0
+    ) {
       await galleryService.syncVendorPortfolioGalleryItems({
         vendorId: String(persistedVendor._id),
         vendorName: String(persistedVendor.businessName ?? "Vendor"),

@@ -19,7 +19,10 @@ export const bookingController = {
       throw new ApiError(401, "Unauthorized");
     }
 
-    const bookings = await bookingService.listBookings(authUser, req.query as Record<string, unknown>);
+    const bookings = await bookingService.listBookings(
+      authUser,
+      req.query as Record<string, unknown>,
+    );
     return sendSuccess(res, "Bookings fetched", { bookings });
   }),
   updateBooking: asyncHandler(async (req, res) => {
@@ -39,7 +42,11 @@ export const bookingController = {
     }
 
     const bookingId = String(req.params.bookingId);
-    const paymentRequest = await bookingService.requestBalancePayment(bookingId, req.body, authUser);
+    const paymentRequest = await bookingService.requestBalancePayment(
+      bookingId,
+      req.body,
+      authUser,
+    );
     return sendSuccess(res, "Balance payment request created", { paymentRequest }, 201);
   }),
   sendBalancePaymentLink: asyncHandler(async (req, res) => {
@@ -57,5 +64,15 @@ export const bookingController = {
       authUser,
     );
     return sendSuccess(res, "Balance payment link sent to customer", { paymentRequest });
+  }),
+  recordManualPayment: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const bookingId = String(req.params.bookingId);
+    const result = await bookingService.recordManualPayment(bookingId, req.body, authUser);
+    return sendSuccess(res, "Manual payment recorded", result, 201);
   }),
 };

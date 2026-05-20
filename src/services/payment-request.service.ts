@@ -37,6 +37,12 @@ type CreateBalancePayload = {
   customerMobile?: string;
 };
 
+type RecordManualBookingPaymentPayload = {
+  amount: number;
+  paymentType?: "BALANCE" | "EXTRA";
+  notes?: string;
+};
+
 function resolveRazorpayCredentials() {
   if (env.RAZORPAY_ENV === "live") {
     return {
@@ -973,6 +979,68 @@ export const paymentRequestService = {
     });
 
     return paymentRequest;
+  },
+
+  recordManualPaymentForBooking: async (
+    bookingId: string,
+    payload: RecordManualBookingPaymentPayload,
+    authUser: AuthUser,
+  ) => {
+    const booking = await ensureBookingAccess(bookingId, authUser);
+
+    if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
+      throw new ApiError(400, "amount must be greater than zero");
+    }
+
+    const totalAmount = Number(booking.amount || 0);
+    const existingPaid = Number(booking.paidAmount || booking.advancePaid || 0);
+    const existingDue =
+      booking.dueAmount !== undefined
+        ? Number(booking.dueAmount)
+        : Math.max(0, totalAmount - existingPaid);
+
+    if (payload.amount > existingDue) {
+      throw new ApiError(400, "Manual payment amount cannot exceed current due amount");
+    }
+
+    const paymentType = payload.paymentType || "BALANCE";
+    const paymentRequest = await paymentRequestRepository.create({
+      leadId: booking.leadId ?? null,
+      bookingId: booking._id,
+      vendorId: booking.vendorId,
+      customerId: booking.customerId ?? null,
+      packageId: booking.packageId,
+      paymentType,
+      status: "paid",
+      finalAmount: totalAmount,
+      requestedAmount: payload.amount,
+      paidAmount: payload.amount,
+      notes: payload.notes || "",
+      metadata: {
+        source: "MANUAL_BOOKING_PAYMENT",
+      },
+    });
+
+    const updatedBooking = await applyPaymentToBooking(String(booking._id), payload.amount);
+
+    await activityTimelineService.addEvent({
+      entityType: "booking",
+      entityId: String(booking._id),
+      vendorId: String(booking.vendorId),
+      actorUserId: authUser.id,
+      event: "MANUAL_PAYMENT_RECORDED",
+      message: "Manual payment recorded for booking",
+      metadata: {
+        paymentRequestId: String(paymentRequest._id),
+        paymentType,
+        paidAmount: payload.amount,
+      },
+    });
+
+    return {
+      paymentRequest,
+      booking: updatedBooking,
+    };
   },
 
   processRazorpayWebhook: async (rawBody: Buffer, signatureHeader: string) => {

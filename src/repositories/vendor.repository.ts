@@ -61,7 +61,12 @@ export const vendorRepository = {
     }
 
     if (typeof filters.approvalStatus === "string" && filters.approvalStatus.trim()) {
-      query.approvalStatus = filters.approvalStatus.trim();
+      const normalizedApprovalStatus = filters.approvalStatus.trim();
+      if (normalizedApprovalStatus === "pending") {
+        query.approvalStatus = { $in: ["pending", null, ""] };
+      } else {
+        query.approvalStatus = normalizedApprovalStatus;
+      }
     }
 
     if (typeof filters.search === "string" && filters.search.trim()) {
@@ -76,7 +81,8 @@ export const vendorRepository = {
       ];
     }
 
-    const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(100, filters.limit)) : 50;
+    const limit =
+      typeof filters.limit === "number" ? Math.max(1, Math.min(100, filters.limit)) : 50;
 
     return VendorModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },

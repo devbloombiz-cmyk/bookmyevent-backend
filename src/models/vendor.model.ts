@@ -44,7 +44,7 @@ const vendorSchema = new Schema(
     approvalStatus: {
       type: String,
       enum: ["pending", "active", "disabled"],
-      default: "active",
+      default: "pending",
     },
     coverImage: { type: String, default: "", trim: true },
     portfolioImages: { type: [String], default: [] },

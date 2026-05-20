@@ -48,7 +48,10 @@ function extractFromMessage(message: string | undefined, label: string) {
 
   const candidates = [label, ...(aliases[label.trim().toLowerCase()] || [])];
   for (const candidate of candidates) {
-    const regex = new RegExp(`(?:^|\\n)\\s*${candidate.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*:\\s*([^\\n\\r]+)`, "i");
+    const regex = new RegExp(
+      `(?:^|\\n)\\s*${candidate.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\s*:\\s*([^\\n\\r]+)`,
+      "i",
+    );
     const value = message.match(regex)?.[1]?.trim();
     if (value) {
       return value;
@@ -147,7 +150,10 @@ export const leadService = {
       const currentStatus = String(existingLead.status);
       const allowed = validLeadTransitions[currentStatus] ?? [];
       if (!allowed.includes(payload.status)) {
-        throw new ApiError(400, `Invalid status transition from ${currentStatus} to ${payload.status}`);
+        throw new ApiError(
+          400,
+          `Invalid status transition from ${currentStatus} to ${payload.status}`,
+        );
       }
 
       if (payload.status === "BOOKED") {
@@ -188,12 +194,17 @@ export const leadService = {
     }
 
     const customerName =
-      String(lead.customerName || "").trim() || extractFromMessage(String(lead.message || ""), "Customer");
+      String(lead.customerName || "").trim() ||
+      extractFromMessage(String(lead.message || ""), "Customer");
     const customerMobile =
       normalizeMobile(String(lead.customerMobile || "")) ||
       normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
     const customerEmail =
-      String(lead.customerEmail || "").trim() || extractFromMessage(String(lead.message || ""), "Email");
+      String(lead.customerEmail || "").trim() ||
+      extractFromMessage(String(lead.message || ""), "Email");
+
+    const paidAmount = payload.advancePaid ?? 0;
+    const dueAmount = Math.max(0, payload.amount - paidAmount);
 
     const booking = await bookingRepository.create({
       customerId: lead.customerId ?? null,
@@ -206,10 +217,10 @@ export const leadService = {
       eventDate: lead.eventDate,
       eventSlot: lead.eventSlot,
       amount: payload.amount,
-      advancePaid: payload.advancePaid ?? 0,
-      paymentStatus: payload.advancePaid && payload.advancePaid > 0 ? "paid" : "pending",
-      paidAmount: payload.advancePaid ?? 0,
-      dueAmount: Math.max(0, payload.amount - (payload.advancePaid ?? 0)),
+      advancePaid: paidAmount,
+      paymentStatus: dueAmount <= 0 ? "paid" : "pending",
+      paidAmount,
+      dueAmount,
       bookingStatus: "upcoming",
       vendorAmount: payload.amount,
       settledAmount: 0,
@@ -217,7 +228,10 @@ export const leadService = {
       settlementStatus: "PENDING",
     });
 
-    await leadRepository.updateById(leadId, { status: "BOOKED", paymentStatus: "paid" });
+    await leadRepository.updateById(leadId, {
+      status: "BOOKED",
+      paymentStatus: dueAmount <= 0 ? "paid" : "pending",
+    });
 
     if (lead.eventDate && lead.eventSlot) {
       await availabilityRepository.upsertSlot({
@@ -251,7 +265,12 @@ export const leadService = {
     payload: { notes?: string },
     authUser: AuthUser,
   ) => {
-    return paymentRequestService.sendOfferPaymentLinkToCustomer(leadId, paymentRequestId, payload, authUser);
+    return paymentRequestService.sendOfferPaymentLinkToCustomer(
+      leadId,
+      paymentRequestId,
+      payload,
+      authUser,
+    );
   },
   recordManualAdvancePaymentForLead: async (
     leadId: string,

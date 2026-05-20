@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 import path from "path";
 import { z } from "zod";
+import { durationToSeconds } from "../utils/duration";
 
 // Load backend .env explicitly so runtime config does not depend on current working directory.
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
@@ -58,7 +59,11 @@ const envSchema = z
     REDIS_URL: z.string().optional(),
     ALLOWED_ORIGINS: z.string().optional(),
     TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(1),
-    API_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(60_000).default(15 * 60 * 1000),
+    API_RATE_LIMIT_WINDOW_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .default(15 * 60 * 1000),
     API_RATE_LIMIT_MAX: z.coerce.number().int().min(20).default(200),
     AUTH_COOKIE_DOMAIN: z.string().optional(),
     AUTH_COOKIE_SECURE: z
@@ -88,12 +93,21 @@ const mongodbUri = parsedEnv.MONGODB_URI;
 
 const defaultAccessExpiry = parsedEnv.NODE_ENV === "development" ? "7d" : "7d";
 const defaultRefreshExpiry = parsedEnv.NODE_ENV === "development" ? "90d" : "90d";
+const minimumSessionSeconds = 60 * 60 * 24 * 7;
+
+function ensureMinDuration(input: string | undefined, fallback: string) {
+  const resolvedSeconds = durationToSeconds(
+    input ?? fallback,
+    durationToSeconds(fallback, minimumSessionSeconds),
+  );
+  return `${Math.max(minimumSessionSeconds, resolvedSeconds)}s`;
+}
 
 export const env = {
   ...parsedEnv,
   MONGODB_URI: mongodbUri,
-  JWT_ACCESS_EXPIRES_IN: parsedEnv.JWT_ACCESS_EXPIRES_IN ?? defaultAccessExpiry,
-  JWT_REFRESH_EXPIRES_IN: parsedEnv.JWT_REFRESH_EXPIRES_IN ?? defaultRefreshExpiry,
+  JWT_ACCESS_EXPIRES_IN: ensureMinDuration(parsedEnv.JWT_ACCESS_EXPIRES_IN, defaultAccessExpiry),
+  JWT_REFRESH_EXPIRES_IN: ensureMinDuration(parsedEnv.JWT_REFRESH_EXPIRES_IN, defaultRefreshExpiry),
   SENDER_NAME: parsedEnv.SENDER_NAME ?? "BookMyEvent",
   SMTP_PORT: parsedEnv.SMTP_PORT ?? 587,
   FROM_EMAIL: parsedEnv.FROM_EMAIL ?? parsedEnv.SENDER_EMAIL,

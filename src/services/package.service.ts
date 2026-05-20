@@ -2,8 +2,10 @@ import { packageRepository } from "../repositories/package.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
-import { resolveVendorIdForAuthUser } from "./vendor-identity.service";
+import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
 import { subscriptionService } from "./subscription.service";
+import { venueOwnerRepository } from "../repositories/venue-owner.repository";
+import { userRepository } from "../repositories/user.repository";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -53,15 +55,76 @@ const normalizeVendorPackagePayload = (payload: Record<string, unknown>) => {
   return normalized;
 };
 
+async function seedVenueOwnerPackagesForLinkedVendor(vendorId: string, authUser: AuthUser) {
+  const venueOwnerByUserId = await venueOwnerRepository.findByUserId(authUser.id);
+  let venueOwner = venueOwnerByUserId;
+
+  if (!venueOwner) {
+    const user = await userRepository.findById(authUser.id);
+    if (user) {
+      venueOwner = await venueOwnerRepository.findByEmailOrMobile(user.email, user.mobile);
+    }
+  }
+
+  const rawPackages = Array.isArray(
+    (venueOwner as { venuePackages?: unknown[] } | null)?.venuePackages,
+  )
+    ? ((venueOwner as { venuePackages: unknown[] }).venuePackages ?? [])
+    : [];
+
+  if (!rawPackages.length) {
+    return;
+  }
+
+  for (const [index, entry] of rawPackages.entries()) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const source = entry as Record<string, unknown>;
+    const title = String(source.packageName || "").trim() || `Venue Package ${index + 1}`;
+    const price = Math.max(0, Number(source.basePrice ?? source.price ?? 0));
+    const description = String(source.description || "").trim();
+    const inclusions = Array.isArray(source.inclusions)
+      ? source.inclusions
+          .filter((item): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : [];
+
+    const portfolioImages = normalizeUrlArray(source.portfolioImages, 4);
+    const videoLinks = normalizeUrlArray(source.videoLinks, 4);
+
+    await packageRepository.createVendorPackage({
+      vendorId,
+      title,
+      description,
+      price,
+      inclusions,
+      coverImage: String(source.coverImage || "").trim(),
+      portfolioImages,
+      videoLinks,
+      isActive: source.isActive !== false,
+    });
+  }
+}
+
 export const packageService = {
   createVendorPackage: async (payload: Record<string, unknown>, authUser: AuthUser) => {
     const normalizedPayload = normalizeVendorPackagePayload(payload);
 
-    if (authUser.permissions.includes(PermissionKeys.PackageVendorCreateOwn)) {
-      const ownVendorId = await resolveVendorIdForAuthUser(authUser);
+    const hasOwnScope =
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+
+    if (authUser.permissions.includes(PermissionKeys.PackageVendorCreateOwn) && hasOwnScope) {
+      const ownVendorId = await resolveVendorIdForScopedUser(authUser);
+      const actorRole = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+        ? "venue_owner"
+        : "vendor";
       const packages = await packageRepository.listVendorPackages(ownVendorId, true);
       await subscriptionService.assertWithinLimit(
-        { id: authUser.id, role: "vendor" },
+        { id: authUser.id, role: actorRole },
         "maxPackages",
         packages.length + 1,
       );
@@ -76,22 +139,44 @@ export const packageService = {
     includeInactive = false,
     authUser?: AuthUser,
   ) => {
-    if (authUser?.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
-      const ownVendorId = await resolveVendorIdForAuthUser(authUser);
-      return packageRepository.listVendorPackages(ownVendorId, true);
+    if (
+      authUser &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
+    ) {
+      const ownVendorId = await resolveVendorIdForScopedUser(authUser);
+      const scopedPackages = await packageRepository.listVendorPackages(ownVendorId, true);
+
+      if (
+        scopedPackages.length === 0 &&
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+      ) {
+        await seedVenueOwnerPackagesForLinkedVendor(ownVendorId, authUser);
+        return packageRepository.listVendorPackages(ownVendorId, true);
+      }
+
+      return scopedPackages;
     }
 
     return packageRepository.listVendorPackages(vendorId, includeInactive);
   },
-  updateVendorPackage: async (packageId: string, payload: Record<string, unknown>, authUser: AuthUser) => {
+  updateVendorPackage: async (
+    packageId: string,
+    payload: Record<string, unknown>,
+    authUser: AuthUser,
+  ) => {
     const normalizedPayload = normalizeVendorPackagePayload(payload);
     const existing = await packageRepository.findVendorPackageById(packageId);
     if (!existing) {
       throw new ApiError(404, "Vendor package not found");
     }
 
-    if (authUser.permissions.includes(PermissionKeys.PackageVendorUpdateOwn)) {
-      const ownVendorId = await resolveVendorIdForAuthUser(authUser);
+    const hasOwnScope =
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+
+    if (authUser.permissions.includes(PermissionKeys.PackageVendorUpdateOwn) && hasOwnScope) {
+      const ownVendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existing.vendorId) !== ownVendorId) {
         throw new ApiError(403, "You are not allowed to update this package");
       }
@@ -105,13 +190,17 @@ export const packageService = {
     return vendorPackage;
   },
   deleteVendorPackage: async (packageId: string, authUser: AuthUser) => {
-    if (authUser.permissions.includes(PermissionKeys.PackageVendorDeleteOwn)) {
+    const hasOwnScope =
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+
+    if (authUser.permissions.includes(PermissionKeys.PackageVendorDeleteOwn) && hasOwnScope) {
       const existing = await packageRepository.findVendorPackageById(packageId);
       if (!existing) {
         throw new ApiError(404, "Vendor package not found");
       }
 
-      const ownVendorId = await resolveVendorIdForAuthUser(authUser);
+      const ownVendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existing.vendorId) !== ownVendorId) {
         throw new ApiError(403, "You are not allowed to delete this package");
       }

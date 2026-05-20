@@ -215,11 +215,32 @@ async function createRazorpayPaymentLink(payload: {
     requestPayload.expire_by = payload.expiryEpochSeconds;
   }
 
-  const response = (await client.paymentLink.create(requestPayload as never)) as unknown as {
+  let response: {
     id?: string;
     short_url?: string;
     reference_id?: string;
   };
+
+  try {
+    response = (await client.paymentLink.create(requestPayload as never)) as unknown as {
+      id?: string;
+      short_url?: string;
+      reference_id?: string;
+    };
+  } catch (firstError) {
+    const statusCode = extractErrorStatusCode(firstError);
+    const shouldRetry = statusCode === 0 || statusCode >= 500;
+
+    if (!shouldRetry) {
+      throw firstError;
+    }
+
+    response = (await client.paymentLink.create(requestPayload as never)) as unknown as {
+      id?: string;
+      short_url?: string;
+      reference_id?: string;
+    };
+  }
 
   return {
     id: String(response.id || ""),
@@ -245,6 +266,71 @@ function buildRazorpayReferenceId(prefix: "lead" | "booking", entityId: string) 
   const base = `${prefix}_${normalizedId}_${timeToken}`;
   // Razorpay enforces max length of 40 for reference_id.
   return base.slice(0, 40);
+}
+
+function extractErrorStatusCode(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return 0;
+  }
+
+  const candidate = error as {
+    statusCode?: number;
+    status?: number;
+    response?: { status?: number; statusCode?: number };
+  };
+
+  return Number(
+    candidate.statusCode ||
+      candidate.status ||
+      candidate.response?.status ||
+      candidate.response?.statusCode ||
+      0,
+  );
+}
+
+function extractErrorMessage(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return "Razorpay request failed";
+  }
+
+  const candidate = error as {
+    description?: string;
+    message?: string;
+    error?: { description?: string; message?: string };
+    response?: {
+      data?: {
+        error?: { description?: string; message?: string };
+        description?: string;
+        message?: string;
+      };
+    };
+  };
+
+  return (
+    candidate.error?.description ||
+    candidate.error?.message ||
+    candidate.response?.data?.error?.description ||
+    candidate.response?.data?.error?.message ||
+    candidate.response?.data?.description ||
+    candidate.response?.data?.message ||
+    candidate.description ||
+    candidate.message ||
+    "Razorpay request failed"
+  );
+}
+
+function toPaymentLinkApiError(error: unknown) {
+  const statusCode = extractErrorStatusCode(error);
+  const message = extractErrorMessage(error);
+
+  if (statusCode >= 400 && statusCode < 500) {
+    return new ApiError(400, `Unable to generate payment link: ${message}`);
+  }
+
+  return new ApiError(
+    502,
+    "Unable to generate payment link. Please verify payment configuration and retry.",
+  );
 }
 
 async function trySendPaymentLinkWhatsapp(payload: {
@@ -388,19 +474,19 @@ export const paymentRequestService = {
         },
       });
     } catch (error) {
+      const normalizedError = toPaymentLinkApiError(error);
       logger.error(
         {
           event: "payment.link.create_failed",
           leadId: String(lead._id),
           referenceId,
+          statusCode: extractErrorStatusCode(error),
+          errorMessage: extractErrorMessage(error),
           error,
         },
         "Razorpay payment link creation failed",
       );
-      throw new ApiError(
-        502,
-        "Unable to generate payment link. Please verify payment configuration and retry.",
-      );
+      throw normalizedError;
     }
 
     if (!paymentLink.id || !paymentLink.shortUrl) {
@@ -637,7 +723,7 @@ export const paymentRequestService = {
 
     await leadRepository.updateById(leadId, {
       quoteAmount: payload.finalAmount,
-      paymentStatus: "paid",
+      paymentStatus: payload.paidAmount >= payload.finalAmount ? "paid" : "pending",
       status: payload.markBooked ? "BOOKED" : "PAYMENT_DONE",
     });
 
@@ -713,7 +799,7 @@ export const paymentRequestService = {
       advancePaid: paidAmount,
       paidAmount,
       dueAmount: Math.max(0, totalAmount - paidAmount),
-      paymentStatus: paidAmount > 0 ? "paid" : "pending",
+      paymentStatus: paidAmount >= totalAmount ? "paid" : "pending",
       bookingStatus: "upcoming",
       vendorAmount: totalAmount,
       settledAmount: 0,
@@ -723,7 +809,7 @@ export const paymentRequestService = {
 
     await leadRepository.updateById(leadId, {
       status: "BOOKED",
-      paymentStatus: paidAmount > 0 ? "paid" : "pending",
+      paymentStatus: paidAmount >= totalAmount ? "paid" : "pending",
     });
 
     await activityTimelineService.addEvent({
@@ -812,19 +898,19 @@ export const paymentRequestService = {
         },
       });
     } catch (error) {
+      const normalizedError = toPaymentLinkApiError(error);
       logger.error(
         {
           event: "payment.link.create_failed",
           bookingId: String(booking._id),
           referenceId,
+          statusCode: extractErrorStatusCode(error),
+          errorMessage: extractErrorMessage(error),
           error,
         },
         "Razorpay balance payment link creation failed",
       );
-      throw new ApiError(
-        502,
-        "Unable to generate payment link. Please verify payment configuration and retry.",
-      );
+      throw normalizedError;
     }
 
     if (!paymentLink.id || !paymentLink.shortUrl) {
@@ -1063,7 +1149,10 @@ export const paymentRequestService = {
     if (String(updatedRequest.paymentType) === "ADVANCE" && updatedRequest.leadId) {
       await leadRepository.updateById(String(updatedRequest.leadId), {
         status: "PAYMENT_DONE",
-        paymentStatus: "paid",
+        paymentStatus:
+          Number(updatedRequest.paidAmount || 0) >= Number(updatedRequest.finalAmount || 0)
+            ? "paid"
+            : "pending",
       });
     }
 

@@ -779,7 +779,13 @@ export const paymentRequestService = {
 
     const isPaid = String(mappedAdvance.status || "").toLowerCase() === "paid";
     const totalAmount = Number(mappedAdvance.finalAmount || lead.quoteAmount || 0);
-    const paidAmount = isPaid ? Number(mappedAdvance.paidAmount || 0) : 0;
+    const requestedAdvanceAmount = Number(mappedAdvance.requestedAmount || 0);
+    const webhookOrManualPaidAmount = Number(mappedAdvance.paidAmount || 0);
+    const paidAmount = isPaid
+      ? Math.max(0, webhookOrManualPaidAmount)
+      : Math.max(0, requestedAdvanceAmount);
+    const dueAmount = Math.max(0, totalAmount - paidAmount);
+    const bookingPaymentStatus = isPaid && dueAmount <= 0 ? "paid" : "pending";
     const customerMobile =
       String(lead.customerMobile || "").trim() ||
       normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
@@ -804,8 +810,8 @@ export const paymentRequestService = {
       amount: totalAmount,
       advancePaid: paidAmount,
       paidAmount,
-      dueAmount: Math.max(0, totalAmount - paidAmount),
-      paymentStatus: paidAmount >= totalAmount ? "paid" : "pending",
+      dueAmount,
+      paymentStatus: bookingPaymentStatus,
       bookingStatus: "upcoming",
       vendorAmount: totalAmount,
       settledAmount: 0,
@@ -815,7 +821,7 @@ export const paymentRequestService = {
 
     await leadRepository.updateById(leadId, {
       status: "BOOKED",
-      paymentStatus: paidAmount >= totalAmount ? "paid" : "pending",
+      paymentStatus: bookingPaymentStatus,
     });
 
     await activityTimelineService.addEvent({
@@ -827,6 +833,8 @@ export const paymentRequestService = {
       message: "Booking confirmed by vendor/venue owner",
       metadata: {
         leadId: String(lead._id),
+        advanceSource: isPaid ? "PAID_ADVANCE" : "ADVANCE_LINK_REQUESTED",
+        advanceAmountUsed: paidAmount,
       },
     });
 

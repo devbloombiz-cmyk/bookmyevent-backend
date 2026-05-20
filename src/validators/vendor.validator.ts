@@ -2,9 +2,18 @@ import { z } from "zod";
 
 const socialLinksSchema = z
   .object({
-    facebook: z.union([z.url(), z.literal("")]).optional().default(""),
-    instagram: z.union([z.url(), z.literal("")]).optional().default(""),
-    youtube: z.union([z.url(), z.literal("")]).optional().default(""),
+    facebook: z
+      .union([z.url(), z.literal("")])
+      .optional()
+      .default(""),
+    instagram: z
+      .union([z.url(), z.literal("")])
+      .optional()
+      .default(""),
+    youtube: z
+      .union([z.url(), z.literal("")])
+      .optional()
+      .default(""),
   })
   .optional()
   .default({
@@ -29,15 +38,24 @@ export const vendorCreateSchema = z.object({
     serviceZones: z.array(z.string()).default([]),
     socialLinks: socialLinksSchema,
     videoLinks: z.array(z.url()).optional().default([]),
-    websiteUrl: z.union([z.url(), z.literal("")]).optional().default(""),
+    websiteUrl: z
+      .union([z.url(), z.literal("")])
+      .optional()
+      .default(""),
     description: z.string().default(""),
     paymentTerms: z.string().optional().default(""),
     travelCost: z.string().optional().default(""),
     deliveryTime: z.string().optional().default(""),
-    pricingModel: z.enum(["base_package", "per_day", "per_plate"]).optional().default("base_package"),
+    pricingModel: z
+      .enum(["base_package", "per_day", "per_plate"])
+      .optional()
+      .default("base_package"),
     pricingAmount: z.number().min(0).optional().default(0),
     approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("active"),
-    coverImage: z.union([z.url(), z.literal("")]).optional().default(""),
+    coverImage: z
+      .union([z.url(), z.literal("")])
+      .optional()
+      .default(""),
     portfolioImages: z.array(z.url()).default([]),
     isVerified: z.boolean().optional().default(false),
     isActive: z.boolean().optional().default(true),
@@ -144,7 +162,7 @@ export const vendorListSchema = z.object({
       .enum(["true", "false"])
       .optional()
       .transform((value) => (value ? value === "true" : undefined)),
-    limit: z.coerce.number().int().min(1).max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(1000).optional(),
   }),
   params: z.object({}).default({}),
 });

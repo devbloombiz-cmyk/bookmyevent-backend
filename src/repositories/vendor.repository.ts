@@ -82,7 +82,7 @@ export const vendorRepository = {
     }
 
     const limit =
-      typeof filters.limit === "number" ? Math.max(1, Math.min(100, filters.limit)) : 50;
+      typeof filters.limit === "number" ? Math.max(1, Math.min(1000, filters.limit)) : 50;
 
     return VendorModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },

@@ -77,6 +77,8 @@ async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: st
 
 export const leadService = {
   createLead: async (payload: Record<string, unknown>, authUser: AuthUser) => {
+    const isVenueOwnerScope = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+    const isVendorScope = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn);
     const vendorId = await resolveVendorIdForLead(authUser, payload.vendorId as string | undefined);
     if (!vendorId) {
       throw new ApiError(400, "vendorId is required");
@@ -86,9 +88,11 @@ export const leadService = {
       ? authUser.id
       : String(payload.customerId ?? "");
 
-    const venueOwnerId = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    const venueOwnerId = isVenueOwnerScope
       ? await resolveVenueOwnerIdForAuthUser(authUser)
-      : payload.venueOwnerId;
+      : isVendorScope
+        ? null
+        : payload.venueOwnerId;
 
     const lead = await leadRepository.create({
       ...payload,

@@ -2,7 +2,10 @@ import { packageRepository } from "../repositories/package.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
-import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
+import {
+  resolveVendorIdForScopedUser,
+  resolveVenueOwnerIdForAuthUser,
+} from "./vendor-identity.service";
 import { subscriptionService } from "./subscription.service";
 import { venueOwnerRepository } from "../repositories/venue-owner.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -95,8 +98,15 @@ async function seedVenueOwnerPackagesForLinkedVendor(vendorId: string, authUser:
     const portfolioImages = normalizeUrlArray(source.portfolioImages, 4);
     const videoLinks = normalizeUrlArray(source.videoLinks, 4);
 
+    const venueOwnerId = String((venueOwner as { _id?: unknown } | null)?._id || "");
+    if (!venueOwnerId) {
+      continue;
+    }
+
     await packageRepository.createVendorPackage({
       vendorId,
+      ownerType: "venue_owner",
+      venueOwnerId,
       title,
       description,
       price,
@@ -122,14 +132,30 @@ export const packageService = {
       const actorRole = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
         ? "venue_owner"
         : "vendor";
-      const packages = await packageRepository.listVendorPackages(ownVendorId, true);
+      const venueOwnerId = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+        ? await resolveVenueOwnerIdForAuthUser(authUser)
+        : undefined;
+      const packages = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+        ? await packageRepository.listVendorPackagesForVenueOwnerActor(
+            ownVendorId,
+            String(venueOwnerId),
+            true,
+          )
+        : await packageRepository.listVendorPackagesForVendorActor(ownVendorId, true);
       await subscriptionService.assertWithinLimit(
         { id: authUser.id, role: actorRole },
         "maxPackages",
         packages.length + 1,
       );
 
-      return packageRepository.createVendorPackage({ ...normalizedPayload, vendorId: ownVendorId });
+      return packageRepository.createVendorPackage({
+        ...normalizedPayload,
+        vendorId: ownVendorId,
+        ownerType: authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+          ? "venue_owner"
+          : "vendor",
+        venueOwnerId: venueOwnerId || null,
+      });
     }
 
     return packageRepository.createVendorPackage(normalizedPayload);
@@ -145,17 +171,28 @@ export const packageService = {
         authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
     ) {
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);
-      const scopedPackages = await packageRepository.listVendorPackages(ownVendorId, true);
 
-      if (
-        scopedPackages.length === 0 &&
-        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
-      ) {
-        await seedVenueOwnerPackagesForLinkedVendor(ownVendorId, authUser);
-        return packageRepository.listVendorPackages(ownVendorId, true);
+      if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+        const ownVenueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+        const scopedPackages = await packageRepository.listVendorPackagesForVenueOwnerActor(
+          ownVendorId,
+          ownVenueOwnerId,
+          true,
+        );
+
+        if (scopedPackages.length === 0) {
+          await seedVenueOwnerPackagesForLinkedVendor(ownVendorId, authUser);
+          return packageRepository.listVendorPackagesForVenueOwnerActor(
+            ownVendorId,
+            ownVenueOwnerId,
+            true,
+          );
+        }
+
+        return scopedPackages;
       }
 
-      return scopedPackages;
+      return packageRepository.listVendorPackagesForVendorActor(ownVendorId, true);
     }
 
     return packageRepository.listVendorPackages(vendorId, includeInactive);

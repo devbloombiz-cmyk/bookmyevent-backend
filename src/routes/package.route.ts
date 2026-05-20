@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { PermissionKeys } from "../config/permissions";
 import { packageController } from "../controllers/package.controller";
-import { requireAuth } from "../middlewares/auth.middleware";
+import { attachAuthIfPresent, requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
@@ -22,7 +22,12 @@ import {
 
 const packageRouter = Router();
 
-packageRouter.get("/vendor", validateRequest(listVendorPackageSchema), packageController.listVendorPackages);
+packageRouter.get(
+  "/vendor",
+  attachAuthIfPresent,
+  validateRequest(listVendorPackageSchema),
+  packageController.listVendorPackages,
+);
 packageRouter.get(
   "/platform",
   validateRequest(listPlatformPackageSchema),

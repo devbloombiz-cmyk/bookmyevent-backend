@@ -20,7 +20,10 @@ export const leadRepository = {
     return LeadModel.find(query).sort({ createdAt: -1 });
   },
   findByVendor: (vendorId: string, status?: string) => {
-    const query: Record<string, unknown> = { vendorId };
+    const query: Record<string, unknown> = {
+      vendorId,
+      $or: [{ venueOwnerId: { $exists: false } }, { venueOwnerId: null }],
+    };
     if (status) {
       query.status = status;
     }

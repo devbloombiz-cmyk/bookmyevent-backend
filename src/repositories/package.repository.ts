@@ -16,6 +16,35 @@ export const packageRepository = {
 
     return VendorPackageModel.find(query).sort({ createdAt: -1 });
   },
+  listVendorPackagesForVendorActor: (vendorId: string, includeInactive = false) => {
+    const query: Record<string, unknown> = {
+      vendorId,
+      $or: [{ ownerType: { $exists: false } }, { ownerType: "vendor" }],
+    };
+
+    if (!includeInactive) {
+      query.isActive = true;
+    }
+
+    return VendorPackageModel.find(query).sort({ createdAt: -1 });
+  },
+  listVendorPackagesForVenueOwnerActor: (
+    vendorId: string,
+    venueOwnerId: string,
+    includeInactive = false,
+  ) => {
+    const query: Record<string, unknown> = {
+      vendorId,
+      ownerType: "venue_owner",
+      venueOwnerId,
+    };
+
+    if (!includeInactive) {
+      query.isActive = true;
+    }
+
+    return VendorPackageModel.find(query).sort({ createdAt: -1 });
+  },
   createPlatformPackage: (payload: Record<string, unknown>) => PlatformPackageModel.create(payload),
   listPlatformPackages: (includeInactive = false) =>
     PlatformPackageModel.find(includeInactive ? {} : { isActive: true }).sort({ createdAt: -1 }),

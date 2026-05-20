@@ -44,7 +44,9 @@ export async function resolveVendorIdForAuthUser(authUser: Pick<AuthenticatedUse
   return String(vendor._id);
 }
 
-export async function resolveVendorIdForVenueOwnerAuthUser(authUser: Pick<AuthenticatedUser, "id">) {
+export async function resolveVendorIdForVenueOwnerAuthUser(
+  authUser: Pick<AuthenticatedUser, "id">,
+) {
   const user = await userRepository.findById(authUser.id);
   if (!user) {
     throw new ApiError(404, "User not found");
@@ -102,6 +104,31 @@ export async function resolveVendorIdForVenueOwnerAuthUser(authUser: Pick<Authen
   });
 
   return String(createdVendor._id);
+}
+
+export async function resolveVenueOwnerIdForAuthUser(authUser: Pick<AuthenticatedUser, "id">) {
+  const venueOwnerByUserId = await venueOwnerRepository.findByUserId(authUser.id);
+  if (venueOwnerByUserId) {
+    return String(venueOwnerByUserId._id);
+  }
+
+  const user = await userRepository.findById(authUser.id);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const venueOwner = await venueOwnerRepository.findByEmailOrMobile(user.email, user.mobile);
+  if (!venueOwner) {
+    throw new ApiError(404, "Venue owner profile not found");
+  }
+
+  if (!venueOwner.userId) {
+    await venueOwnerRepository.updateById(String(venueOwner._id), {
+      userId: authUser.id,
+    });
+  }
+
+  return String(venueOwner._id);
 }
 
 export async function resolveVendorIdForScopedUser(

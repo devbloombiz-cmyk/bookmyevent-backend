@@ -4,7 +4,10 @@ import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 import { bookingRepository } from "../repositories/booking.repository";
 import { availabilityRepository } from "../repositories/availability.repository";
-import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
+import {
+  resolveVendorIdForScopedUser,
+  resolveVenueOwnerIdForAuthUser,
+} from "./vendor-identity.service";
 import { leadNotificationService } from "./notifications/lead/lead-notification.service";
 import { logger } from "../config/logger";
 import { paymentRequestService } from "./payment-request.service";
@@ -83,9 +86,14 @@ export const leadService = {
       ? authUser.id
       : String(payload.customerId ?? "");
 
+    const venueOwnerId = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+      ? await resolveVenueOwnerIdForAuthUser(authUser)
+      : payload.venueOwnerId;
+
     const lead = await leadRepository.create({
       ...payload,
       vendorId,
+      venueOwnerId: venueOwnerId || null,
       customerId: customerId || null,
     });
 
@@ -116,10 +124,12 @@ export const leadService = {
   listLeads: async (authUser: AuthUser, filters: Record<string, unknown>) => {
     const requestedStatus = typeof filters.status === "string" ? filters.status : undefined;
 
-    if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
-    ) {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+      const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+      return leadRepository.findByVenueOwner(venueOwnerId, requestedStatus);
+    }
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForScopedUser(authUser);
       return leadRepository.findByVendor(vendorId, requestedStatus);
     }
@@ -136,10 +146,14 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
-    ) {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+      const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+      if (String(existingLead.venueOwnerId || "") !== venueOwnerId) {
+        throw new ApiError(403, "You are not allowed to update this lead");
+      }
+    }
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existingLead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to update this lead");
@@ -178,10 +192,14 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
-    ) {
+    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+      const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
+      if (String(lead.venueOwnerId || "") !== venueOwnerId) {
+        throw new ApiError(403, "You are not allowed to convert this lead");
+      }
+    }
+
+    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
       const vendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(lead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to convert this lead");

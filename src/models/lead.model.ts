@@ -24,6 +24,7 @@ const leadSchema = new Schema(
 );
 
 leadSchema.index({ vendorId: 1 });
+leadSchema.index({ venueOwnerId: 1 });
 leadSchema.index({ customerId: 1 });
 leadSchema.index({ status: 1 });
 leadSchema.index({ source: 1 });

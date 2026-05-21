@@ -1,3 +1,4 @@
+import { PermissionKeys } from "../config/permissions";
 import { vendorService } from "../services/vendor.service";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
@@ -10,7 +11,16 @@ export const vendorController = {
     return sendSuccess(res, "Vendor created", { vendor }, 201);
   }),
   listVendors: asyncHandler(async (req, res) => {
-    const vendors = await vendorService.listVendors(req.query as Record<string, unknown>);
+    const filters = { ...(req.query as Record<string, unknown>) };
+    const isAdminUser = Boolean(
+      req.authUser?.permissions?.includes(PermissionKeys.WorkspaceAdminAccess),
+    );
+
+    if (!isAdminUser) {
+      filters.includeInactive = false;
+    }
+
+    const vendors = await vendorService.listVendors(filters);
     return sendSuccess(res, "Vendors fetched", { vendors });
   }),
   getVendorById: asyncHandler(async (req, res) => {
@@ -34,10 +44,7 @@ export const vendorController = {
       return sendSuccess(res, "Vendor profile not found", { vendor: null });
     }
 
-    const vendor = await vendorService.updateMyVendorProfile(
-      { id: authUser.id },
-      req.body,
-    );
+    const vendor = await vendorService.updateMyVendorProfile({ id: authUser.id }, req.body);
     return sendSuccess(res, "Vendor profile updated", { vendor });
   }),
   updateVendor: asyncHandler(async (req, res) => {

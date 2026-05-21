@@ -13,10 +13,30 @@ export const uploadController = {
       throw new ApiError(400, "Image file is required in form-data field 'file'");
     }
 
-    const isVendorScope = Boolean(req.authUser?.permissions.includes(PermissionKeys.ScopeVendorOwn));
-    const isVenueOwnerScope = Boolean(req.authUser?.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn));
-    const defaultFolder = isVendorScope || isVenueOwnerScope ? "vendors" : "services";
+    const hasPrivilegedUpload = Boolean(
+      req.authUser?.permissions.includes(PermissionKeys.UploadImage) ||
+      req.authUser?.permissions.includes(PermissionKeys.VendorUpdateAny) ||
+      req.authUser?.permissions.includes(PermissionKeys.CategoryManage),
+    );
+
+    const isVendorScope = Boolean(
+      req.authUser?.permissions.includes(PermissionKeys.ScopeVendorOwn),
+    );
+    const isVenueOwnerScope = Boolean(
+      req.authUser?.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn),
+    );
+    const defaultFolder = hasPrivilegedUpload
+      ? isVendorScope || isVenueOwnerScope
+        ? "vendors"
+        : "services"
+      : "vendors";
     const folder = parseS3UploadFolder(req.body?.folder, defaultFolder);
+
+    // Public onboarding uploads are restricted to vendor/venue media folders only.
+    if (!hasPrivilegedUpload && folder !== "vendors" && folder !== "venues") {
+      throw new ApiError(403, "Upload is allowed only for vendor or venue onboarding");
+    }
+
     const uploadedFile = await uploadToS3(file, folder);
 
     return sendSuccess(

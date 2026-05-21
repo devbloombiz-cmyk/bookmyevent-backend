@@ -14,7 +14,12 @@ import {
 
 const venueOwnerRouter = Router();
 
-venueOwnerRouter.get("/", validateRequest(listVenueOwnerSchema), venueOwnerController.listVenueOwners);
+venueOwnerRouter.get(
+  "/",
+  attachAuthIfPresent,
+  validateRequest(listVenueOwnerSchema),
+  venueOwnerController.listVenueOwners,
+);
 venueOwnerRouter.get(
   "/me",
   requireAuth,

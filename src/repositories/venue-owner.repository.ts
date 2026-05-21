@@ -36,7 +36,8 @@ export const venueOwnerRepository = {
   },
   findAll: (filters: Record<string, unknown> = {}) => {
     const query: Record<string, unknown> = {};
-    const includeInactive = filters.includeInactive === true;
+    const includeInactive =
+      filters.includeInactive === true || String(filters.includeInactive || "") === "true";
 
     if (!includeInactive) {
       query.approvalStatus = "active";

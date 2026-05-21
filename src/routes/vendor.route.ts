@@ -14,18 +14,19 @@ import {
 
 const vendorRouter = Router();
 
-vendorRouter.get("/", validateRequest(vendorListSchema), vendorController.listVendors);
+vendorRouter.get(
+  "/",
+  attachAuthIfPresent,
+  validateRequest(vendorListSchema),
+  vendorController.listVendors,
+);
 vendorRouter.get(
   "/me",
   requireAuth,
   authorize([PermissionKeys.VendorUpdateOwn, PermissionKeys.VendorUpdateAny]),
   vendorController.getMyVendorProfile,
 );
-vendorRouter.get(
-  "/:vendorId",
-  validateRequest(vendorDeleteSchema),
-  vendorController.getVendorById,
-);
+vendorRouter.get("/:vendorId", validateRequest(vendorDeleteSchema), vendorController.getVendorById);
 vendorRouter.post(
   "/",
   attachAuthIfPresent,

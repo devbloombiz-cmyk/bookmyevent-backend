@@ -582,7 +582,7 @@ const syncLocationIfPresent = async (payload: Record<string, unknown>) => {
 export const venueOwnerService = {
   createVenueOwner: async (
     payload: Record<string, unknown>,
-    options?: { requestedByRole?: UserRole },
+    options?: { requestedByRole?: UserRole; isPrivilegedRequester?: boolean },
   ) => {
     const normalizedPayload = normalizePayload(payload, { partial: false });
     const normalizedEmail = normalizeText(normalizedPayload.email).toLowerCase();
@@ -594,9 +594,10 @@ export const venueOwnerService = {
     });
 
     const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
-    const isPrivilegedCreator = options?.requestedByRole
-      ? privilegedCreatorRoles.includes(options.requestedByRole)
-      : false;
+    const isPrivilegedCreator = Boolean(
+      options?.isPrivilegedRequester ||
+      (options?.requestedByRole ? privilegedCreatorRoles.includes(options.requestedByRole) : false),
+    );
 
     normalizedPayload.registrationSource = isPrivilegedCreator ? "admin" : "public";
 

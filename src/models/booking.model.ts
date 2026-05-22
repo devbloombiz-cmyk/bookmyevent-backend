@@ -22,6 +22,8 @@ const bookingSchema = new Schema(
     settledAmount: { type: Number, default: 0, min: 0 },
     pendingSettlement: { type: Number, default: 0, min: 0 },
     settlementStatus: { type: String, enum: SETTLEMENT_STATUSES, default: "PENDING" },
+    referralCode: { type: String, default: "", trim: true, uppercase: true },
+    referralVendorId: { type: Schema.Types.ObjectId, ref: "Vendor", default: null },
   },
   { timestamps: true },
 );
@@ -31,5 +33,6 @@ bookingSchema.index({ vendorId: 1 });
 bookingSchema.index({ eventDate: 1 });
 bookingSchema.index({ leadId: 1 });
 bookingSchema.index({ settlementStatus: 1 });
+bookingSchema.index({ referralVendorId: 1 });
 
 export const BookingModel = model("Booking", bookingSchema);

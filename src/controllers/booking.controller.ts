@@ -25,6 +25,25 @@ export const bookingController = {
     );
     return sendSuccess(res, "Bookings fetched", { bookings });
   }),
+  listMyReferralBookings: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const referralData = await bookingService.listMyReferralBookings(authUser);
+    return sendSuccess(res, "Referral bookings fetched", referralData);
+  }),
+  listAdminReferralInsights: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const limit = Number(req.query.limit || 100);
+    const referralData = await bookingService.listAdminReferralInsights(limit);
+    return sendSuccess(res, "Referral insights fetched", referralData);
+  }),
   updateBooking: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {

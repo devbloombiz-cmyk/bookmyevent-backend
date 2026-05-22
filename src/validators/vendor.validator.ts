@@ -109,6 +109,19 @@ export const vendorDeleteSchema = z.object({
   }),
 });
 
+export const vendorReferralCodeValidationSchema = z.object({
+  body: z.object({}).optional().default({}),
+  query: z.object({}),
+  params: z.object({
+    code: z
+      .string()
+      .trim()
+      .min(4)
+      .max(24)
+      .regex(/^[A-Za-z0-9]+$/),
+  }),
+});
+
 export const vendorSelfUpdateSchema = z.object({
   body: z
     .object({

@@ -309,6 +309,34 @@ const enforceVendorServiceZonePolicy = (
 };
 
 export const vendorService = {
+  validateReferralCode: async (code: string) => {
+    const normalizedCode = normalizeText(code).toUpperCase();
+    if (!normalizedCode) {
+      return { valid: false, vendor: null };
+    }
+
+    const vendor = await vendorRepository.findByReferralCode(normalizedCode);
+    if (!vendor) {
+      return { valid: false, vendor: null };
+    }
+
+    const vendorRecord = vendor.toObject() as Record<string, unknown>;
+    const isActive =
+      Boolean(vendorRecord.isActive) && String(vendorRecord.approvalStatus) === "active";
+
+    if (!isActive) {
+      return { valid: false, vendor: null };
+    }
+
+    return {
+      valid: true,
+      vendor: {
+        _id: String(vendorRecord._id),
+        businessName: String(vendorRecord.businessName || ""),
+        referralCode: String(vendorRecord.referralCode || normalizedCode),
+      },
+    };
+  },
   createVendor: async (
     payload: Record<string, unknown>,
     options?: { requestedByRole?: UserRole },
@@ -349,17 +377,34 @@ export const vendorService = {
       mobile: String(normalizedPayload.mobile || ""),
     });
 
-    const [linkedUser] = await Promise.all([
-      ensureVendorUserAccount(normalizedPayload),
-      syncLocationIfPresent(normalizedPayload),
-    ]);
-
-    if (linkedUser?._id) {
-      normalizedPayload.userId = linkedUser._id;
-    }
+    await syncLocationIfPresent(normalizedPayload);
 
     const vendor = await vendorRepository.create(normalizedPayload);
-    await syncVendorUserStatus(vendor.toObject(), normalizedPayload);
+
+    try {
+      const linkedUser = await ensureVendorUserAccount(normalizedPayload);
+      if (linkedUser?._id) {
+        await vendorRepository.updateById(String(vendor._id), {
+          userId: linkedUser._id,
+        });
+      }
+
+      await syncVendorUserStatus(
+        {
+          ...vendor.toObject(),
+          ...(linkedUser?._id ? { userId: linkedUser._id } : {}),
+        },
+        normalizedPayload,
+      );
+    } catch (error) {
+      logger.warn(
+        {
+          vendorId: String(vendor._id),
+          error,
+        },
+        "Vendor created without linked user account",
+      );
+    }
 
     const portfolioImages = Array.isArray(normalizedPayload.portfolioImages)
       ? normalizedPayload.portfolioImages.filter(

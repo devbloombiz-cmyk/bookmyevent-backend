@@ -11,6 +11,8 @@ import {
 import { leadNotificationService } from "./notifications/lead/lead-notification.service";
 import { logger } from "../config/logger";
 import { paymentRequestService } from "./payment-request.service";
+import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
+import { vendorRepository } from "../repositories/vendor.repository";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -64,6 +66,73 @@ function extractFromMessage(message: string | undefined, label: string) {
   return "";
 }
 
+async function trySendLeadReceivedWhatsapp(payload: { mobile: string }) {
+  if (!payload.mobile || !ultramsgWhatsappService.isEnabled()) {
+    return;
+  }
+
+  const message = [
+    "Booking Request Received - BookMyEvent",
+    "",
+    "Dear Customer,",
+    "",
+    "Your booking request has been successfully received and forwarded to the vendor.",
+    "",
+    "We are currently waiting for the vendor response regarding confirmation.",
+    "",
+    "Booking confirmation will be provided after the advance payment is completed.",
+    "",
+    "Thank you for choosing BookMyEvent.",
+    "",
+    "Team BookMyEvent",
+    "www.bookmyevent.ae",
+  ].join("\n");
+
+  await ultramsgWhatsappService.sendMessage({
+    to: payload.mobile,
+    body: message,
+    context: "booking_confirmation",
+  });
+}
+
+async function trySendLeadCancelledWhatsapp(payload: {
+  mobile: string;
+  customerName?: string;
+  eventDate?: Date;
+}) {
+  if (!payload.mobile || !ultramsgWhatsappService.isEnabled()) {
+    return;
+  }
+
+  const eventDateLabel = payload.eventDate
+    ? new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(payload.eventDate)
+    : "Not specified";
+
+  const message = [
+    "Booking Request Cancelled - BookMyEvent",
+    "",
+    `Dear ${payload.customerName || "Customer"},`,
+    "",
+    "Your booking request has been marked as cancelled by the vendor.",
+    `Event Date: ${eventDateLabel}`,
+    "",
+    "For help, please contact Team BookMyEvent.",
+    "",
+    "Team BookMyEvent",
+    "www.bookmyevent.ae",
+  ].join("\n");
+
+  await ultramsgWhatsappService.sendMessage({
+    to: payload.mobile,
+    body: message,
+    context: "booking_confirmation",
+  });
+}
+
 async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: string) {
   if (
     authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
@@ -73,6 +142,14 @@ async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: st
   }
 
   return requestedVendorId;
+}
+
+function normalizeReferralCode(rawValue: unknown) {
+  if (typeof rawValue !== "string") {
+    return "";
+  }
+
+  return rawValue.trim().toUpperCase();
 }
 
 export const leadService = {
@@ -94,11 +171,33 @@ export const leadService = {
         ? null
         : payload.venueOwnerId;
 
+    const referralCode = normalizeReferralCode(payload.referralCode);
+    let referralVendorId: string | null = null;
+
+    if (referralCode) {
+      const referralVendor = await vendorRepository.findByReferralCode(referralCode);
+      if (
+        !referralVendor ||
+        !referralVendor.isActive ||
+        String(referralVendor.approvalStatus) !== "active"
+      ) {
+        throw new ApiError(400, "Invalid referral code. Remove or update to continue.");
+      }
+
+      if (String(referralVendor._id) === String(vendorId)) {
+        throw new ApiError(400, "Invalid referral code. Remove or update to continue.");
+      }
+
+      referralVendorId = String(referralVendor._id);
+    }
+
     const lead = await leadRepository.create({
       ...payload,
       vendorId,
       venueOwnerId: venueOwnerId || null,
       customerId: customerId || null,
+      referralCode,
+      referralVendorId,
     });
 
     if (lead.customerId) {
@@ -110,6 +209,24 @@ export const leadService = {
           eventDate: new Date(lead.eventDate),
           eventSlot: String(lead.eventSlot || "Full Day"),
           location: String(lead.location || ""),
+        });
+      });
+    }
+
+    const customerMobile =
+      normalizeMobile(String(lead.customerMobile || "")) ||
+      normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
+    if (customerMobile) {
+      setImmediate(() => {
+        void trySendLeadReceivedWhatsapp({ mobile: customerMobile }).catch((error) => {
+          logger.warn(
+            {
+              leadId: String(lead._id),
+              mobile: customerMobile,
+              error,
+            },
+            "Unable to send lead received WhatsApp notification",
+          );
         });
       });
     }
@@ -176,6 +293,33 @@ export const leadService = {
 
       if (payload.status === "BOOKED") {
         await paymentRequestService.finalizeLeadAsBooked(leadId, authUser);
+      }
+
+      if (payload.status === "CANCELLED") {
+        const customerMobile =
+          normalizeMobile(String(existingLead.customerMobile || "")) ||
+          normalizeMobile(extractFromMessage(String(existingLead.message || ""), "Mobile"));
+        if (customerMobile) {
+          setImmediate(() => {
+            void trySendLeadCancelledWhatsapp({
+              mobile: customerMobile,
+              customerName:
+                String(existingLead.customerName || "").trim() ||
+                extractFromMessage(String(existingLead.message || ""), "Customer") ||
+                "Customer",
+              eventDate: existingLead.eventDate ? new Date(existingLead.eventDate) : undefined,
+            }).catch((error) => {
+              logger.warn(
+                {
+                  leadId,
+                  mobile: customerMobile,
+                  error,
+                },
+                "Unable to send lead cancellation WhatsApp notification",
+              );
+            });
+          });
+        }
       }
     }
 
@@ -248,6 +392,8 @@ export const leadService = {
       settledAmount: 0,
       pendingSettlement: payload.amount,
       settlementStatus: "PENDING",
+      referralCode: String(lead.referralCode || ""),
+      referralVendorId: lead.referralVendorId ?? null,
     });
 
     await leadRepository.updateById(leadId, {

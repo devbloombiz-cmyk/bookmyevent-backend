@@ -19,6 +19,8 @@ const leadSchema = new Schema(
     quoteAmount: { type: Number, min: 0, default: 0 },
     paymentLink: { type: String, default: "" },
     paymentStatus: { type: String, enum: PAYMENT_STATUSES, default: "pending" },
+    referralCode: { type: String, default: "", trim: true, uppercase: true },
+    referralVendorId: { type: Schema.Types.ObjectId, ref: "Vendor", default: null },
   },
   { timestamps: true },
 );
@@ -29,5 +31,6 @@ leadSchema.index({ customerId: 1 });
 leadSchema.index({ status: 1 });
 leadSchema.index({ source: 1 });
 leadSchema.index({ eventDate: 1 });
+leadSchema.index({ referralVendorId: 1 });
 
 export const LeadModel = model("Lead", leadSchema);

@@ -14,6 +14,13 @@ export const createLeadSchema = z.object({
     eventDate: z.coerce.date(),
     eventSlot: z.string().optional().default("Full Day"),
     location: z.string().min(2),
+    referralCode: z
+      .string()
+      .trim()
+      .min(4)
+      .max(24)
+      .regex(/^[A-Za-z0-9]+$/)
+      .optional(),
     message: z.string().default(""),
     status: z.enum(LEAD_STATUSES).default("NEW"),
     quoteAmount: z.number().nonnegative().default(0),

@@ -2,6 +2,7 @@ import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import { userRepository } from "../repositories/user.repository";
 import { vendorRepository } from "../repositories/vendor.repository";
 import { venueOwnerRepository } from "../repositories/venue-owner.repository";
+import { workspaceOperatorRepository } from "../repositories/workspace-operator.repository";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 
@@ -19,6 +20,18 @@ function normalizeVenueTypeToVendorSubCategory(venueType?: string) {
 }
 
 export async function resolveVendorIdForAuthUser(authUser: Pick<AuthenticatedUser, "id">) {
+  const operatorMapping = await workspaceOperatorRepository.findByOperatorUserId(authUser.id);
+  if (operatorMapping?.ownerType === "vendor" && operatorMapping.vendorId) {
+    return String(operatorMapping.vendorId);
+  }
+
+  if (operatorMapping?.ownerType === "venue_owner" && operatorMapping.venueOwnerId) {
+    const venueOwner = await venueOwnerRepository.findById(String(operatorMapping.venueOwnerId));
+    if (venueOwner?.linkedVendorId) {
+      return String(venueOwner.linkedVendorId);
+    }
+  }
+
   const vendorByUserId = await vendorRepository.findByUserId(authUser.id);
   if (vendorByUserId) {
     return String(vendorByUserId._id);
@@ -47,6 +60,20 @@ export async function resolveVendorIdForAuthUser(authUser: Pick<AuthenticatedUse
 export async function resolveVendorIdForVenueOwnerAuthUser(
   authUser: Pick<AuthenticatedUser, "id">,
 ) {
+  const operatorMapping = await workspaceOperatorRepository.findByOperatorUserId(authUser.id);
+  if (operatorMapping?.ownerType === "venue_owner" && operatorMapping.venueOwnerId) {
+    const mappedVenueOwner = await venueOwnerRepository.findById(
+      String(operatorMapping.venueOwnerId),
+    );
+    if (!mappedVenueOwner) {
+      throw new ApiError(404, "Venue owner profile not found");
+    }
+
+    if (mappedVenueOwner.linkedVendorId) {
+      return String(mappedVenueOwner.linkedVendorId);
+    }
+  }
+
   const user = await userRepository.findById(authUser.id);
   if (!user) {
     throw new ApiError(404, "User not found");
@@ -107,6 +134,11 @@ export async function resolveVendorIdForVenueOwnerAuthUser(
 }
 
 export async function resolveVenueOwnerIdForAuthUser(authUser: Pick<AuthenticatedUser, "id">) {
+  const operatorMapping = await workspaceOperatorRepository.findByOperatorUserId(authUser.id);
+  if (operatorMapping?.ownerType === "venue_owner" && operatorMapping.venueOwnerId) {
+    return String(operatorMapping.venueOwnerId);
+  }
+
   const venueOwnerByUserId = await venueOwnerRepository.findByUserId(authUser.id);
   if (venueOwnerByUserId) {
     return String(venueOwnerByUserId._id);

@@ -371,16 +371,54 @@ async function trySendPaymentLinkWhatsapp(payload: {
   amount: number;
   paymentLink: string;
   notes?: string;
+  customerName?: string;
+  packageName?: string;
+  eventType?: string;
+  eventDate?: Date;
+  functionTime?: string;
+  customerEmail?: string;
 }) {
   if (!payload.mobile || !ultramsgWhatsappService.isEnabled()) {
     return false;
   }
 
+  const eventDateLabel = payload.eventDate
+    ? new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(payload.eventDate)
+    : "Not provided";
+
   const message = [
-    "BookMyEvent Payment Request",
-    `Amount: INR ${Math.round(payload.amount).toLocaleString("en-IN")}`,
-    payload.notes ? `Notes: ${payload.notes}` : "",
-    `Pay now: ${payload.paymentLink}`,
+    "Booking Approved - Payment Request",
+    "",
+    `Dear ${payload.customerName || "Customer"},`,
+    "",
+    "Your booking request has been approved by the vendor.",
+    "",
+    "* Booking Details",
+    `* Package: ${payload.packageName || "Selected Package"}`,
+    `* Event Type: ${payload.eventType || "General Event"}`,
+    `* Function Date: ${eventDateLabel}`,
+    `* Function Time: ${payload.functionTime || "Not specified"}`,
+    "",
+    `* Advance Payment Amount: INR ${Math.round(payload.amount).toLocaleString("en-IN")}`,
+    "",
+    "* Customer Details",
+    `* Name: ${payload.customerName || "Customer"}`,
+    `* Mobile: ${payload.mobile}`,
+    `* Email: ${payload.customerEmail || "Not provided"}`,
+    "",
+    "* Notes",
+    payload.notes ||
+      "Thank you for choosing BookMyEvent. Kindly complete the advance payment to confirm your booking.",
+    "",
+    "* Pay Now",
+    payload.paymentLink,
+    "",
+    "Team BookMyEvent",
+    "www.bookmyevent.ae",
   ]
     .filter(Boolean)
     .join("\n");
@@ -397,6 +435,7 @@ async function trySendPaymentLinkWhatsapp(payload: {
 async function trySendBookingConfirmedWhatsapp(payload: {
   mobile: string;
   bookingId: string;
+  customerName?: string;
   packageName?: string;
   eventDate?: Date;
 }) {
@@ -404,13 +443,30 @@ async function trySendBookingConfirmedWhatsapp(payload: {
     return false;
   }
 
-  const eventDateLabel = payload.eventDate ? payload.eventDate.toISOString().slice(0, 10) : "";
+  const eventDateLabel = payload.eventDate
+    ? new Intl.DateTimeFormat("en-GB", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      }).format(payload.eventDate)
+    : "";
   const message = [
-    "BookMyEvent Booking Confirmed",
-    payload.packageName ? `Package: ${payload.packageName}` : "",
-    eventDateLabel ? `Event Date: ${eventDateLabel}` : "",
-    `Booking ID: ${payload.bookingId}`,
-    "Your booking is confirmed. Thank you.",
+    "Booking Confirmed - BookMyEvent",
+    "",
+    `Dear ${payload.customerName || "Customer"},`,
+    "",
+    "Your booking has been successfully confirmed.",
+    "",
+    "* Booking Details",
+    payload.packageName ? `* Package: ${payload.packageName}` : "",
+    eventDateLabel ? `* Event Date: ${eventDateLabel}` : "",
+    `* Booking ID: ${payload.bookingId}`,
+    "",
+    "Thank you for choosing BookMyEvent.",
+    "We look forward to making your event memorable.",
+    "",
+    "Team BookMyEvent",
+    "www.bookmyevent.ae",
   ]
     .filter(Boolean)
     .join("\n");
@@ -542,6 +598,12 @@ export const paymentRequestService = {
             amount: payload.advanceAmount,
             paymentLink: paymentLink.shortUrl,
             notes: payload.notes,
+            customerName,
+            customerEmail,
+            packageName: payload.packageName || lead.venuePackageName || "",
+            eventType: lead.venuePackageName || "Event",
+            eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
+            functionTime: lead.eventSlot || "",
           })
         : false;
 
@@ -620,6 +682,18 @@ export const paymentRequestService = {
       amount: Number(paymentRequest.requestedAmount || 0),
       paymentLink: String(paymentRequest.paymentLinkUrl || ""),
       notes: payload.notes || String(paymentRequest.notes || ""),
+      customerName:
+        String(lead.customerName || "").trim() ||
+        extractFromMessage(String(lead.message || ""), "Customer") ||
+        "Customer",
+      customerEmail:
+        String(lead.customerEmail || "").trim() ||
+        extractFromMessage(String(lead.message || ""), "Email") ||
+        "",
+      packageName: String(paymentRequest.packageName || lead.venuePackageName || ""),
+      eventType: String(lead.venuePackageName || "Event"),
+      eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
+      functionTime: String(lead.eventSlot || ""),
     });
 
     const updated = await paymentRequestRepository.updateById(String(paymentRequest._id), {
@@ -686,6 +760,12 @@ export const paymentRequestService = {
       amount: Number(paymentRequest.requestedAmount || 0),
       paymentLink: String(paymentRequest.paymentLinkUrl || ""),
       notes: payload.notes || String(paymentRequest.notes || ""),
+      customerName,
+      customerEmail,
+      packageName: String(paymentRequest.packageName || "Selected Package"),
+      eventType: "Event",
+      eventDate: booking.eventDate ? new Date(booking.eventDate) : undefined,
+      functionTime: String(booking.eventSlot || ""),
     });
 
     const updated = await paymentRequestRepository.updateById(String(paymentRequest._id), {
@@ -872,6 +952,7 @@ export const paymentRequestService = {
       await trySendBookingConfirmedWhatsapp({
         mobile,
         bookingId: String((booking as { _id?: unknown })._id || ""),
+        customerName,
         packageName: String(mappedAdvance.packageName || lead.venuePackageName || ""),
         eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
       });

@@ -8,6 +8,7 @@ import {
   vendorCreateSchema,
   vendorDeleteSchema,
   vendorListSchema,
+  vendorReferralCodeValidationSchema,
   vendorSelfUpdateSchema,
   vendorUpdateSchema,
 } from "../validators/vendor.validator";
@@ -25,6 +26,11 @@ vendorRouter.get(
   requireAuth,
   authorize([PermissionKeys.VendorUpdateOwn, PermissionKeys.VendorUpdateAny]),
   vendorController.getMyVendorProfile,
+);
+vendorRouter.get(
+  "/referral-code/:code",
+  validateRequest(vendorReferralCodeValidationSchema),
+  vendorController.validateReferralCode,
 );
 vendorRouter.get("/:vendorId", validateRequest(vendorDeleteSchema), vendorController.getVendorById);
 vendorRouter.post(

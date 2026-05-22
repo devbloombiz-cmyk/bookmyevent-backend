@@ -29,6 +29,11 @@ export const vendorController = {
     const vendor = await vendorService.getVendorById(vendorId, includeInactive);
     return sendSuccess(res, "Vendor fetched", { vendor });
   }),
+  validateReferralCode: asyncHandler(async (req, res) => {
+    const code = String(req.params.code || "");
+    const validation = await vendorService.validateReferralCode(code);
+    return sendSuccess(res, "Referral code validation completed", validation);
+  }),
   getMyVendorProfile: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {

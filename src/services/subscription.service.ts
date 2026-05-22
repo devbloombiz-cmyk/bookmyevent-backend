@@ -54,7 +54,9 @@ const normalizeDate = (value: unknown) => {
 
 const countVenueOwnerPortfolioImages = (venueOwner: Record<string, unknown>) => {
   const profileImages = Array.isArray(venueOwner.profileImages)
-    ? venueOwner.profileImages.filter((item): item is string => typeof item === "string" && item.trim().length > 0).length
+    ? venueOwner.profileImages.filter(
+        (item): item is string => typeof item === "string" && item.trim().length > 0,
+      ).length
     : 0;
 
   const packageImages = Array.isArray(venueOwner.venuePackages)
@@ -65,7 +67,9 @@ const countVenueOwnerPortfolioImages = (venueOwner: Record<string, unknown>) => 
 
         const value = (pkg as Record<string, unknown>).portfolioImages;
         const count = Array.isArray(value)
-          ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).length
+          ? value.filter(
+              (item): item is string => typeof item === "string" && item.trim().length > 0,
+            ).length
           : 0;
 
         return acc + count;
@@ -84,7 +88,9 @@ const countVenueOwnerVideoLinks = (venueOwner: Record<string, unknown>) => {
 
         const links = (pkg as Record<string, unknown>).videoLinks;
         const count = Array.isArray(links)
-          ? links.filter((item): item is string => typeof item === "string" && item.trim().length > 0).length
+          ? links.filter(
+              (item): item is string => typeof item === "string" && item.trim().length > 0,
+            ).length
           : 0;
 
         return acc + count;
@@ -101,7 +107,53 @@ const parseActorType = (authUser: Pick<AuthenticatedUser, "role">): ActorType =>
     return "venue_owner";
   }
 
-  throw new ApiError(403, "Subscription access is only available for vendor and venue owner accounts");
+  throw new ApiError(
+    403,
+    "Subscription access is only available for vendor and venue owner accounts",
+  );
+};
+
+const buildReferralCodeCandidate = (vendorId: string) => {
+  const suffix = vendorId.slice(-4).toUpperCase();
+  const random = crypto.randomBytes(2).toString("hex").toUpperCase();
+  return `BME${suffix}${random}`;
+};
+
+const ensureVendorReferralCode = async (vendorId: string) => {
+  const existingVendor = await vendorRepository.findById(vendorId);
+  if (!existingVendor) {
+    return;
+  }
+
+  if (String(existingVendor.referralCode || "").trim()) {
+    return;
+  }
+
+  const assignedAt = new Date();
+
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const candidate = buildReferralCodeCandidate(vendorId);
+
+    try {
+      const updated = await vendorRepository.updateById(vendorId, {
+        referralCode: candidate,
+        referralCodeAssignedAt: assignedAt,
+      });
+
+      if (updated && String(updated.referralCode || "") === candidate) {
+        return;
+      }
+    } catch (error) {
+      const duplicateKeyErrorCode = 11000;
+      if ((error as { code?: unknown })?.code === duplicateKeyErrorCode) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  logger.warn({ vendorId }, "Unable to assign referral code after subscription activation");
 };
 
 const ensureBasePlans = async () => {
@@ -145,7 +197,11 @@ const resolveActor = async (authUser: Pick<AuthenticatedUser, "id" | "role">) =>
   if (actorType === "vendor") {
     const vendorByUserId = await vendorRepository.findByUserId(authUser.id);
     if (vendorByUserId) {
-      return { actorType, actorId: String(vendorByUserId._id), actorRecord: vendorByUserId.toObject() };
+      return {
+        actorType,
+        actorId: String(vendorByUserId._id),
+        actorRecord: vendorByUserId.toObject(),
+      };
     }
 
     const user = await userRepository.findById(authUser.id);
@@ -203,14 +259,22 @@ const toLimits = (value: unknown): SubscriptionLimits => {
   };
 };
 
-const computeUsageForActor = async (actorType: ActorType, actorId: string, actorRecord: Record<string, unknown>) => {
+const computeUsageForActor = async (
+  actorType: ActorType,
+  actorId: string,
+  actorRecord: Record<string, unknown>,
+) => {
   if (actorType === "vendor") {
     const portfolioImages = Array.isArray(actorRecord.portfolioImages)
-      ? actorRecord.portfolioImages.filter((item): item is string => typeof item === "string" && item.trim().length > 0).length
+      ? actorRecord.portfolioImages.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        ).length
       : 0;
 
     const videoLinks = Array.isArray(actorRecord.videoLinks)
-      ? actorRecord.videoLinks.filter((item): item is string => typeof item === "string" && item.trim().length > 0).length
+      ? actorRecord.videoLinks.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        ).length
       : 0;
 
     const packages = await VendorPackageModel.countDocuments({ vendorId: actorId });
@@ -233,12 +297,16 @@ const resolveCurrentSubscription = async (actorType: ActorType, actorId: string)
 
   if (latest) {
     const endsAt = normalizeDate((latest as { endsAt?: unknown }).endsAt);
-    const paymentStatus = String((latest as { paymentStatus?: unknown }).paymentStatus ?? "pending");
+    const paymentStatus = String(
+      (latest as { paymentStatus?: unknown }).paymentStatus ?? "pending",
+    );
     const status = String((latest as { status?: unknown }).status ?? "inactive");
 
     const hasNotExpired = !endsAt || endsAt.getTime() >= now.getTime();
     if (paymentStatus === "confirmed" && status === "active" && hasNotExpired) {
-      const plan = await subscriptionRepository.getPlanByCode(String((latest as { planCode?: unknown }).planCode ?? FREE_PLAN_CODE));
+      const plan = await subscriptionRepository.getPlanByCode(
+        String((latest as { planCode?: unknown }).planCode ?? FREE_PLAN_CODE),
+      );
 
       return {
         subscription: latest,
@@ -248,9 +316,12 @@ const resolveCurrentSubscription = async (actorType: ActorType, actorId: string)
     }
 
     if (endsAt && endsAt.getTime() < now.getTime() && status === "active") {
-      await subscriptionRepository.updateSubscriptionById(String((latest as { _id?: unknown })._id ?? ""), {
-        status: "expired",
-      });
+      await subscriptionRepository.updateSubscriptionById(
+        String((latest as { _id?: unknown })._id ?? ""),
+        {
+          status: "expired",
+        },
+      );
     }
   }
 
@@ -413,7 +484,8 @@ export const subscriptionService = {
     const updated = await subscriptionRepository.updatePlanByCode(normalizedCode, {
       actorTypes: payload.actorTypes?.length ? payload.actorTypes : existing.actorTypes,
       name: payload.name !== undefined ? payload.name.trim() : existing.name,
-      description: payload.description !== undefined ? payload.description.trim() : existing.description,
+      description:
+        payload.description !== undefined ? payload.description.trim() : existing.description,
       priceInr:
         typeof payload.priceInr === "number"
           ? Math.max(0, Math.round(payload.priceInr))
@@ -436,7 +508,11 @@ export const subscriptionService = {
   },
   createCheckoutIntent: async (
     authUser: Pick<AuthenticatedUser, "id" | "role">,
-    payload: { planCode: string; paymentProvider?: "manual" | "razorpay"; paymentReference?: string },
+    payload: {
+      planCode: string;
+      paymentProvider?: "manual" | "razorpay";
+      paymentReference?: string;
+    },
   ) => {
     const actor = await resolveActor(authUser);
     await ensureBasePlans();
@@ -466,8 +542,12 @@ export const subscriptionService = {
       const latestEndsAt = normalizeDate((latest as { endsAt?: unknown }).endsAt);
       const latestPlanCode = String((latest as { planCode?: unknown }).planCode || "");
       const latestStatus = String((latest as { status?: unknown }).status || "");
-      const latestPaymentStatus = String((latest as { paymentStatus?: unknown }).paymentStatus || "");
-      const latestProvider = String((latest as { paymentProvider?: unknown }).paymentProvider || "");
+      const latestPaymentStatus = String(
+        (latest as { paymentStatus?: unknown }).paymentStatus || "",
+      );
+      const latestProvider = String(
+        (latest as { paymentProvider?: unknown }).paymentProvider || "",
+      );
 
       const stillActive =
         latestStatus === "active" &&
@@ -489,7 +569,9 @@ export const subscriptionService = {
 
       if (canReusePendingRazorpayOrder) {
         const { keyId } = buildRazorpayClient();
-        const amountInr = Number((latest as { amountInr?: unknown }).amountInr || plan.priceInr || 0);
+        const amountInr = Number(
+          (latest as { amountInr?: unknown }).amountInr || plan.priceInr || 0,
+        );
         const amountPaise = Math.round(amountInr * 100);
 
         return {
@@ -637,7 +719,10 @@ export const subscriptionService = {
       let updatedSubscription: unknown = null;
 
       await session.withTransaction(async () => {
-        const existing = await subscriptionRepository.findAccountSubscriptionById(subscriptionId, session);
+        const existing = await subscriptionRepository.findAccountSubscriptionById(
+          subscriptionId,
+          session,
+        );
         if (!existing) {
           throw new ApiError(404, "Subscription request not found");
         }
@@ -677,7 +762,8 @@ export const subscriptionService = {
         }
 
         const currentEndsAt = normalizeDate(existing.endsAt);
-        const startsAt = currentEndsAt && currentEndsAt.getTime() > now.getTime() ? currentEndsAt : now;
+        const startsAt =
+          currentEndsAt && currentEndsAt.getTime() > now.getTime() ? currentEndsAt : now;
         const endsAt = new Date(startsAt.getTime() + 365 * MS_PER_DAY);
 
         updatedSubscription = await subscriptionRepository.updateSubscriptionById(
@@ -694,7 +780,9 @@ export const subscriptionService = {
             amountInr: Number(existing.amountInr || plan.priceInr || 0),
             updatedBy: authUser.id,
             metadata: {
-              ...(typeof existing.metadata === "object" && existing.metadata ? existing.metadata : {}),
+              ...(typeof existing.metadata === "object" && existing.metadata
+                ? existing.metadata
+                : {}),
               paymentConfirmedBy: "razorpay_callback",
               paymentConfirmedAt: now.toISOString(),
             },
@@ -705,6 +793,10 @@ export const subscriptionService = {
 
       if (!updatedSubscription) {
         throw new ApiError(500, "Unable to confirm Razorpay payment");
+      }
+
+      if (actor.actorType === "vendor") {
+        await ensureVendorReferralCode(actor.actorId);
       }
 
       return updatedSubscription;
@@ -761,6 +853,10 @@ export const subscriptionService = {
 
     if (!updated) {
       throw new ApiError(404, "Subscription request not found");
+    }
+
+    if (existing.actorType === "vendor") {
+      await ensureVendorReferralCode(String(existing.actorId));
     }
 
     return updated;
@@ -825,6 +921,10 @@ export const subscriptionService = {
       throw new ApiError(404, "Subscription request not found");
     }
 
+    if (existing.actorType === "vendor") {
+      await ensureVendorReferralCode(String(existing.actorId));
+    }
+
     return updated;
   },
   processRazorpayWebhook: async (rawBody: Buffer, signatureHeader: string) => {
@@ -847,7 +947,10 @@ export const subscriptionService = {
     const providedDigest = Buffer.from(providedSignature, "hex");
 
     // Security: constant-time comparison prevents timing attacks.
-    if (providedDigest.length !== expectedDigest.length || !crypto.timingSafeEqual(providedDigest, expectedDigest)) {
+    if (
+      providedDigest.length !== expectedDigest.length ||
+      !crypto.timingSafeEqual(providedDigest, expectedDigest)
+    ) {
       throw new ApiError(401, "Invalid Razorpay webhook signature");
     }
 

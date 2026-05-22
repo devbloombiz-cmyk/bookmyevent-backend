@@ -56,6 +56,9 @@ export const PermissionKeys = {
   UserProfileUpdate: "user:profile:update",
   UserSystemRead: "user:system:read",
   UserSystemCreate: "user:system:create",
+  OperatorReadOwn: "operator:read:own",
+  OperatorCreateOwn: "operator:create:own",
+  OperatorUpdateOwn: "operator:update:own",
 
   ScopeVendorOwn: "scope:vendor:own",
   ScopeVenueOwnerOwn: "scope:venue-owner:own",
@@ -64,7 +67,10 @@ export const PermissionKeys = {
 
 export type PermissionKey = (typeof PermissionKeys)[keyof typeof PermissionKeys];
 
-export const DefaultLandingByPermissionPriority: Array<{ permission: PermissionKey; path: string }> = [
+export const DefaultLandingByPermissionPriority: Array<{
+  permission: PermissionKey;
+  path: string;
+}> = [
   { permission: PermissionKeys.WorkspaceAdminAccess, path: "/admin" },
   { permission: PermissionKeys.WorkspaceVendorAccess, path: "/vendor" },
   { permission: PermissionKeys.WorkspaceVenueOwnerAccess, path: "/venue-owner" },
@@ -154,6 +160,9 @@ export const DefaultRolePermissionKeys: Record<string, PermissionKey[]> = {
     PermissionKeys.UploadImage,
     PermissionKeys.UserProfileRead,
     PermissionKeys.UserProfileUpdate,
+    PermissionKeys.OperatorReadOwn,
+    PermissionKeys.OperatorCreateOwn,
+    PermissionKeys.OperatorUpdateOwn,
     PermissionKeys.ScopeVendorOwn,
   ],
   [SystemRoleKeys.VenueOwner]: [
@@ -168,6 +177,9 @@ export const DefaultRolePermissionKeys: Record<string, PermissionKey[]> = {
     PermissionKeys.UploadImage,
     PermissionKeys.UserProfileRead,
     PermissionKeys.UserProfileUpdate,
+    PermissionKeys.OperatorReadOwn,
+    PermissionKeys.OperatorCreateOwn,
+    PermissionKeys.OperatorUpdateOwn,
     PermissionKeys.ScopeVenueOwnerOwn,
   ],
   [SystemRoleKeys.Customer]: [

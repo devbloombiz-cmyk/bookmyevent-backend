@@ -611,17 +611,35 @@ export const venueOwnerService = {
       normalizedPayload.isActive = true;
     }
 
-    const [linkedUser] = await Promise.all([
-      ensureVenueOwnerUserAccount(normalizedPayload),
-      syncLocationIfPresent(normalizedPayload),
-    ]);
-
-    if (linkedUser?._id) {
-      normalizedPayload.userId = linkedUser._id;
-    }
+    await syncLocationIfPresent(normalizedPayload);
 
     const venueOwner = await venueOwnerRepository.create(normalizedPayload);
-    await syncVenueOwnerUserStatus(venueOwner.toObject(), normalizedPayload);
+
+    try {
+      const linkedUser = await ensureVenueOwnerUserAccount(normalizedPayload);
+      if (linkedUser?._id) {
+        await venueOwnerRepository.updateById(String(venueOwner._id), {
+          userId: linkedUser._id,
+        });
+      }
+
+      await syncVenueOwnerUserStatus(
+        {
+          ...venueOwner.toObject(),
+          ...(linkedUser?._id ? { userId: linkedUser._id } : {}),
+        },
+        normalizedPayload,
+      );
+    } catch (error) {
+      logger.warn(
+        {
+          venueOwnerId: String(venueOwner._id),
+          error,
+        },
+        "Venue owner created without linked user account",
+      );
+    }
+
     return venueOwnerRepository.findById(String(venueOwner._id));
   },
   listVenueOwners: async (filters: Record<string, unknown>) => {

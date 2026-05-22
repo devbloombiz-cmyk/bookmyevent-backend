@@ -50,7 +50,16 @@ export const vendorRepository = {
     }
 
     if (typeof filters.district === "string" && filters.district.trim()) {
-      query.district = new RegExp(`^${escapeRegExp(filters.district.trim())}$`, "i");
+      const districtRegex = new RegExp(`^${escapeRegExp(filters.district.trim())}$`, "i");
+      query.$or = [
+        ...((query.$or as Record<string, unknown>[]) || []),
+        {
+          district: districtRegex,
+        },
+        {
+          serviceZones: { $in: [districtRegex] },
+        },
+      ];
     }
 
     if (typeof filters.city === "string" && filters.city.trim()) {
@@ -79,7 +88,7 @@ export const vendorRepository = {
 
     if (typeof filters.search === "string" && filters.search.trim()) {
       const searchRegex = new RegExp(escapeRegExp(filters.search.trim()), "i");
-      query.$or = [
+      const searchableOr = [
         { businessName: searchRegex },
         { ownerName: searchRegex },
         { category: searchRegex },
@@ -87,6 +96,13 @@ export const vendorRepository = {
         { city: searchRegex },
         { serviceZones: { $in: [searchRegex] } },
       ];
+
+      if (Array.isArray(query.$or) && query.$or.length) {
+        query.$and = [{ $or: query.$or }, { $or: searchableOr }];
+        delete query.$or;
+      } else {
+        query.$or = searchableOr;
+      }
     }
 
     const limit =
@@ -95,6 +111,14 @@ export const vendorRepository = {
     return VendorModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
   findById: (id: string) => VendorModel.findById(id),
+  findByIds: (ids: string[]) =>
+    VendorModel.find({
+      _id: {
+        $in: ids,
+      },
+    }),
+  findByReferralCode: (referralCode: string) =>
+    VendorModel.findOne({ referralCode: referralCode.trim().toUpperCase() }),
   updateById: (id: string, payload: Record<string, unknown>) =>
     VendorModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),
   deleteById: (id: string) => VendorModel.findByIdAndDelete(id),

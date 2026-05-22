@@ -8,6 +8,8 @@ import {
   bookingBalanceRequestSchema,
   bookingBalanceSendSchema,
   bookingCreateSchema,
+  bookingReferralAdminListSchema,
+  bookingReferralVendorListSchema,
   bookingListSchema,
   bookingManualPaymentSchema,
   bookingUpdateSchema,
@@ -31,6 +33,20 @@ bookingRouter.post(
   requireAuth,
   validateRequest(bookingCreateSchema),
   bookingController.createBooking,
+);
+bookingRouter.get(
+  "/referrals/me",
+  requireAuth,
+  authorize([PermissionKeys.BookingReadOwnVendor]),
+  validateRequest(bookingReferralVendorListSchema),
+  bookingController.listMyReferralBookings,
+);
+bookingRouter.get(
+  "/referrals/admin",
+  requireAuth,
+  authorize([PermissionKeys.BookingReadAny]),
+  validateRequest(bookingReferralAdminListSchema),
+  bookingController.listAdminReferralInsights,
 );
 bookingRouter.put(
   "/:bookingId",

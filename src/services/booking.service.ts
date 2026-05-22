@@ -14,6 +14,7 @@ import { paymentRequestService } from "./payment-request.service";
 import { activityTimelineService } from "./activity-timeline.service";
 import { leadRepository } from "../repositories/lead.repository";
 import { userRepository } from "../repositories/user.repository";
+import { vendorRepository } from "../repositories/vendor.repository";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -366,5 +367,110 @@ export const bookingService = {
     authUser: AuthUser,
   ) => {
     return paymentRequestService.recordManualPaymentForBooking(bookingId, payload, authUser);
+  },
+  listMyReferralBookings: async (authUser: AuthUser) => {
+    const vendorId = await resolveVendorIdForAuthUser(authUser);
+    const rows = await bookingRepository.findByReferralVendorId(vendorId);
+    const bookings = rows.map((item) => item.toObject() as Record<string, unknown>);
+
+    const relatedVendorIds = Array.from(
+      new Set(bookings.map((item) => String(item.vendorId || "")).filter((id) => Boolean(id))),
+    );
+    const bookedVendors = relatedVendorIds.length
+      ? await vendorRepository.findByIds(relatedVendorIds)
+      : [];
+    const bookedVendorMap = new Map(
+      bookedVendors.map((vendor) => [
+        String(vendor._id),
+        {
+          businessName: String(vendor.businessName || ""),
+          category: String(vendor.category || ""),
+        },
+      ]),
+    );
+
+    const enhancedBookings = bookings.map((booking) => ({
+      ...booking,
+      bookedVendor: bookedVendorMap.get(String(booking.vendorId || "")) || null,
+    }));
+
+    const summary = {
+      totalReferrals: bookings.length,
+      completedReferrals: bookings.filter(
+        (item) => String(item.bookingStatus || "") === "completed",
+      ).length,
+      totalAmount: bookings.reduce((acc, item) => acc + Number(item.amount || 0), 0),
+    };
+
+    return { summary, bookings: enhancedBookings };
+  },
+  listAdminReferralInsights: async (limit = 100) => {
+    const normalizedLimit = Math.max(1, Math.min(500, Number(limit) || 100));
+    const [leaderboardRows, bookingRows] = await Promise.all([
+      bookingRepository.aggregateReferralLeaderboard(normalizedLimit),
+      bookingRepository.findAllWithReferral(normalizedLimit),
+    ]);
+
+    const referralVendorIds = Array.from(
+      new Set(
+        leaderboardRows
+          .map((item) => String((item as { _id?: unknown })._id || ""))
+          .filter((id) => Boolean(id)),
+      ),
+    );
+    const bookingVendorIds = Array.from(
+      new Set(bookingRows.map((item) => String(item.vendorId || "")).filter((id) => Boolean(id))),
+    );
+
+    const vendorRows = await vendorRepository.findByIds(
+      Array.from(new Set([...referralVendorIds, ...bookingVendorIds])),
+    );
+    const vendorMap = new Map(
+      vendorRows.map((vendor) => [
+        String(vendor._id),
+        {
+          businessName: String(vendor.businessName || ""),
+          referralCode: String(vendor.referralCode || ""),
+        },
+      ]),
+    );
+
+    const leaderboard = leaderboardRows.map((row, index) => {
+      const vendorId = String((row as { _id?: unknown })._id || "");
+      const vendor = vendorMap.get(vendorId) || { businessName: "", referralCode: "" };
+
+      return {
+        rank: index + 1,
+        referralVendorId: vendorId,
+        referralVendorName: vendor.businessName,
+        referralCode: vendor.referralCode,
+        totalReferrals: Number((row as { totalReferrals?: unknown }).totalReferrals || 0),
+        completedReferrals: Number(
+          (row as { completedReferrals?: unknown }).completedReferrals || 0,
+        ),
+        totalAmount: Number((row as { totalAmount?: unknown }).totalAmount || 0),
+      };
+    });
+
+    const bookings = bookingRows.map((item) => {
+      const row = item.toObject() as Record<string, unknown>;
+      const referralVendorId = String(row.referralVendorId || "");
+      const bookedVendorId = String(row.vendorId || "");
+
+      return {
+        ...row,
+        referralVendor: referralVendorId ? vendorMap.get(referralVendorId) || null : null,
+        bookedVendor: bookedVendorId ? vendorMap.get(bookedVendorId) || null : null,
+      };
+    });
+
+    return {
+      summary: {
+        totalReferralBookings: bookings.length,
+        uniqueReferralVendors: leaderboard.length,
+      },
+      leaderboard,
+      bookings,
+    };
   },
 };

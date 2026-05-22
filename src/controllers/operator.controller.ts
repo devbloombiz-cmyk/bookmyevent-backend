@@ -14,8 +14,12 @@ export const operatorController = {
   }),
 
   updateMyWorkspaceOperator: asyncHandler(async (req, res) => {
+    const operatorUserId = Array.isArray(req.params.operatorUserId)
+      ? req.params.operatorUserId[0]
+      : req.params.operatorUserId;
+
     const operator = await operatorService.updateMyWorkspaceOperator(
-      req.params.operatorUserId,
+      String(operatorUserId || ""),
       req.body,
       req.authUser!,
     );

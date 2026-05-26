@@ -184,10 +184,6 @@ export const leadService = {
         throw new ApiError(400, "Invalid referral code. Remove or update to continue.");
       }
 
-      if (String(referralVendor._id) === String(vendorId)) {
-        throw new ApiError(400, "Invalid referral code. Remove or update to continue.");
-      }
-
       referralVendorId = String(referralVendor._id);
     }
 

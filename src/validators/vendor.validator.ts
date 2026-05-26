@@ -23,43 +23,58 @@ const socialLinksSchema = z
   });
 
 export const vendorCreateSchema = z.object({
-  body: z.object({
-    businessName: z.string().min(2),
-    ownerName: z.string().min(2),
-    email: z.email(),
-    mobile: z.string().min(8).max(20),
-    category: z.string().min(2),
-    subCategory: z.string().min(2),
-    state: z.string().optional().default(""),
-    district: z.string().optional().default(""),
-    city: z.string().min(2),
-    locationDisplayName: z.string().optional().default(""),
-    locationInputMode: z.enum(["collection", "manual"]).optional().default("collection"),
-    serviceZones: z.array(z.string()).default([]),
-    socialLinks: socialLinksSchema,
-    videoLinks: z.array(z.url()).optional().default([]),
-    websiteUrl: z
-      .union([z.url(), z.literal("")])
-      .optional()
-      .default(""),
-    description: z.string().default(""),
-    paymentTerms: z.string().optional().default(""),
-    travelCost: z.string().optional().default(""),
-    deliveryTime: z.string().optional().default(""),
-    pricingModel: z
-      .enum(["base_package", "per_day", "per_plate"])
-      .optional()
-      .default("base_package"),
-    pricingAmount: z.number().min(0).optional().default(0),
-    approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("active"),
-    coverImage: z
-      .union([z.url(), z.literal("")])
-      .optional()
-      .default(""),
-    portfolioImages: z.array(z.url()).default([]),
-    isVerified: z.boolean().optional().default(false),
-    isActive: z.boolean().optional().default(true),
-  }),
+  body: z
+    .object({
+      businessName: z.string().min(2),
+      ownerName: z.string().min(2),
+      email: z.email(),
+      mobile: z.string().min(8).max(20),
+      category: z.string().min(2),
+      subCategory: z.string().min(2).optional(),
+      subCategories: z.array(z.string().min(2)).optional(),
+      state: z.string().optional().default(""),
+      district: z.string().optional().default(""),
+      city: z.string().min(2),
+      locationDisplayName: z.string().optional().default(""),
+      locationInputMode: z.enum(["collection", "manual"]).optional().default("collection"),
+      serviceZones: z.array(z.string()).default([]),
+      socialLinks: socialLinksSchema,
+      videoLinks: z.array(z.url()).optional().default([]),
+      websiteUrl: z
+        .union([z.url(), z.literal("")])
+        .optional()
+        .default(""),
+      description: z.string().default(""),
+      paymentTerms: z.string().optional().default(""),
+      travelCost: z.string().optional().default(""),
+      deliveryTime: z.string().optional().default(""),
+      pricingModel: z
+        .enum(["base_package", "per_day", "per_plate"])
+        .optional()
+        .default("base_package"),
+      pricingAmount: z.number().min(0).optional().default(0),
+      approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("active"),
+      coverImage: z
+        .union([z.url(), z.literal("")])
+        .optional()
+        .default(""),
+      portfolioImages: z.array(z.url()).default([]),
+      isVerified: z.boolean().optional().default(false),
+      isActive: z.boolean().optional().default(true),
+    })
+    .superRefine((payload, ctx) => {
+      const hasLegacySubCategory = Boolean(payload.subCategory?.trim());
+      const hasNewSubCategories =
+        Array.isArray(payload.subCategories) && payload.subCategories.length > 0;
+
+      if (!hasLegacySubCategory && !hasNewSubCategories) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Provide at least one sub category",
+          path: ["subCategories"],
+        });
+      }
+    }),
   query: z.object({}),
   params: z.object({}),
 });
@@ -73,6 +88,7 @@ export const vendorUpdateSchema = z.object({
       mobile: z.string().min(8).max(20).optional(),
       category: z.string().min(2).optional(),
       subCategory: z.string().min(2).optional(),
+      subCategories: z.array(z.string().min(2)).optional(),
       state: z.string().optional(),
       district: z.string().optional(),
       city: z.string().min(2).optional(),
@@ -109,19 +125,6 @@ export const vendorDeleteSchema = z.object({
   }),
 });
 
-export const vendorReferralCodeValidationSchema = z.object({
-  body: z.object({}).optional().default({}),
-  query: z.object({}),
-  params: z.object({
-    code: z
-      .string()
-      .trim()
-      .min(4)
-      .max(24)
-      .regex(/^[A-Za-z0-9]+$/),
-  }),
-});
-
 export const vendorSelfUpdateSchema = z.object({
   body: z
     .object({
@@ -131,6 +134,7 @@ export const vendorSelfUpdateSchema = z.object({
       mobile: z.string().min(8).max(20).optional(),
       category: z.string().min(2).optional(),
       subCategory: z.string().min(2).optional(),
+      subCategories: z.array(z.string().min(2)).optional(),
       state: z.string().optional(),
       district: z.string().optional(),
       city: z.string().min(2).optional(),
@@ -159,6 +163,7 @@ export const vendorListSchema = z.object({
   query: z.object({
     category: z.string().min(2).optional(),
     subCategory: z.string().min(2).optional(),
+    subCategories: z.array(z.string().min(2)).optional(),
     search: z.string().min(1).optional(),
     state: z.string().min(2).optional(),
     district: z.string().min(2).optional(),

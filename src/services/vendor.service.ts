@@ -13,6 +13,21 @@ import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whats
 import { logger } from "../config/logger";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+const normalizeSubCategories = (value: unknown) => {
+  if (!Array.isArray(value)) {
+    return [] as string[];
+  }
+
+  const unique = new Set<string>();
+  for (const item of value) {
+    const normalized = normalizeText(item);
+    if (normalized) {
+      unique.add(normalized);
+    }
+  }
+
+  return Array.from(unique);
+};
 const normalizeUrl = (value: unknown) => {
   const url = normalizeText(value);
   if (!url) {
@@ -71,6 +86,21 @@ const buildNormalizedVendorPayload = (
           .map((item) => item.trim())
           .filter(Boolean)
       : [];
+  }
+
+  const shouldNormalizeSubCategories =
+    !options.partial || "subCategory" in payload || "subCategories" in payload;
+  if (shouldNormalizeSubCategories) {
+    const normalizedSubCategories = normalizeSubCategories(payload.subCategories);
+    const normalizedSubCategory = normalizeText(payload.subCategory);
+    const derivedSubCategories = normalizedSubCategories.length
+      ? normalizedSubCategories
+      : normalizedSubCategory
+        ? [normalizedSubCategory]
+        : [];
+
+    normalized.subCategories = derivedSubCategories;
+    normalized.subCategory = derivedSubCategories[0] || "";
   }
 
   if (!options.partial || "socialLinks" in payload) {
@@ -176,6 +206,24 @@ const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
     passwordHash,
     role: "vendor",
   });
+};
+
+const withBackwardCompatibleSubCategories = (
+  vendor: Record<string, unknown>,
+): Record<string, unknown> & { subCategory: string; subCategories: string[] } => {
+  const existingSubCategories = normalizeSubCategories(vendor.subCategories);
+  const legacySubCategory = normalizeText(vendor.subCategory);
+  const subCategories = existingSubCategories.length
+    ? existingSubCategories
+    : legacySubCategory
+      ? [legacySubCategory]
+      : [];
+
+  return {
+    ...vendor,
+    subCategory: legacySubCategory || subCategories[0] || "",
+    subCategories,
+  } as Record<string, unknown> & { subCategory: string; subCategories: string[] };
 };
 
 const syncLocationIfPresent = async (payload: Record<string, unknown>) => {
@@ -309,34 +357,6 @@ const enforceVendorServiceZonePolicy = (
 };
 
 export const vendorService = {
-  validateReferralCode: async (code: string) => {
-    const normalizedCode = normalizeText(code).toUpperCase();
-    if (!normalizedCode) {
-      return { valid: false, vendor: null };
-    }
-
-    const vendor = await vendorRepository.findByReferralCode(normalizedCode);
-    if (!vendor) {
-      return { valid: false, vendor: null };
-    }
-
-    const vendorRecord = vendor.toObject() as Record<string, unknown>;
-    const isActive =
-      Boolean(vendorRecord.isActive) && String(vendorRecord.approvalStatus) === "active";
-
-    if (!isActive) {
-      return { valid: false, vendor: null };
-    }
-
-    return {
-      valid: true,
-      vendor: {
-        _id: String(vendorRecord._id),
-        businessName: String(vendorRecord.businessName || ""),
-        referralCode: String(vendorRecord.referralCode || normalizedCode),
-      },
-    };
-  },
   createVendor: async (
     payload: Record<string, unknown>,
     options?: { requestedByRole?: UserRole },
@@ -377,34 +397,17 @@ export const vendorService = {
       mobile: String(normalizedPayload.mobile || ""),
     });
 
-    await syncLocationIfPresent(normalizedPayload);
+    const [linkedUser] = await Promise.all([
+      ensureVendorUserAccount(normalizedPayload),
+      syncLocationIfPresent(normalizedPayload),
+    ]);
+
+    if (linkedUser?._id) {
+      normalizedPayload.userId = linkedUser._id;
+    }
 
     const vendor = await vendorRepository.create(normalizedPayload);
-
-    try {
-      const linkedUser = await ensureVendorUserAccount(normalizedPayload);
-      if (linkedUser?._id) {
-        await vendorRepository.updateById(String(vendor._id), {
-          userId: linkedUser._id,
-        });
-      }
-
-      await syncVendorUserStatus(
-        {
-          ...vendor.toObject(),
-          ...(linkedUser?._id ? { userId: linkedUser._id } : {}),
-        },
-        normalizedPayload,
-      );
-    } catch (error) {
-      logger.warn(
-        {
-          vendorId: String(vendor._id),
-          error,
-        },
-        "Vendor created without linked user account",
-      );
-    }
+    await syncVendorUserStatus(vendor.toObject(), normalizedPayload);
 
     const portfolioImages = Array.isArray(normalizedPayload.portfolioImages)
       ? normalizedPayload.portfolioImages.filter(
@@ -430,7 +433,7 @@ export const vendorService = {
     const activeProIdSet = new Set(activeProRows.map((item) => String(item.actorId)));
 
     return vendors.map((vendor) => {
-      const row = vendor.toObject() as Record<string, unknown>;
+      const row = withBackwardCompatibleSubCategories(vendor.toObject() as Record<string, unknown>);
       const isSubscribedPro = activeProIdSet.has(String(vendor._id));
       const isVerified = Boolean(row.isVerified) || isSubscribedPro;
       return {
@@ -458,7 +461,7 @@ export const vendorService = {
       vendorId,
     ]);
     const isSubscribedPro = activeProRows.length > 0;
-    const row = vendor.toObject() as Record<string, unknown>;
+    const row = withBackwardCompatibleSubCategories(vendor.toObject() as Record<string, unknown>);
 
     return {
       ...row,

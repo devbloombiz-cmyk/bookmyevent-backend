@@ -59,6 +59,60 @@ function extractFromMessage(message: string | undefined, label: string) {
   return "";
 }
 
+function toDateOnly(value: Date) {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function isFutureEventDate(value: unknown) {
+  const parsed = new Date(String(value || ""));
+  if (Number.isNaN(parsed.getTime())) {
+    return false;
+  }
+
+  const today = toDateOnly(new Date());
+  const eventDate = toDateOnly(parsed);
+  return eventDate.getTime() > today.getTime();
+}
+
+function normalizeBookingAmounts(payload: Record<string, unknown>) {
+  const amount = Number(payload.amount || 0);
+  const advancePaid = Number(payload.advancePaid || 0);
+  const explicitPaidAmount = Number(payload.paidAmount);
+  const paidAmount = Number.isFinite(explicitPaidAmount)
+    ? explicitPaidAmount
+    : Number.isFinite(advancePaid)
+      ? advancePaid
+      : 0;
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new ApiError(400, "amount must be a valid positive number");
+  }
+
+  if (!Number.isFinite(advancePaid) || advancePaid < 0) {
+    throw new ApiError(400, "advancePaid must be a valid positive number");
+  }
+
+  if (advancePaid > amount) {
+    throw new ApiError(400, "advancePaid cannot exceed total amount");
+  }
+
+  if (!Number.isFinite(paidAmount) || paidAmount < 0) {
+    throw new ApiError(400, "paidAmount must be a valid positive number");
+  }
+
+  const normalizedPaidAmount = Math.max(paidAmount, advancePaid);
+  if (normalizedPaidAmount > amount) {
+    throw new ApiError(400, "paidAmount cannot exceed total amount");
+  }
+
+  return {
+    amount,
+    advancePaid,
+    paidAmount: normalizedPaidAmount,
+    dueAmount: Math.max(0, amount - normalizedPaidAmount),
+  };
+}
+
 async function hydrateBookingCustomerDetails(booking: Record<string, unknown>) {
   const lead = booking.leadId ? await leadRepository.findById(String(booking.leadId)) : null;
   const customer = booking.customerId
@@ -184,6 +238,22 @@ async function assertScopedBookingAccess(existing: Record<string, unknown>, auth
 
 export const bookingService = {
   createBooking: async (payload: Record<string, unknown>, authUser: AuthUser) => {
+    if (
+      String(payload.bookingStatus || "") === "completed" &&
+      isFutureEventDate(payload.eventDate)
+    ) {
+      throw new ApiError(400, "Booking can be marked completed only on or after event date");
+    }
+
+    const normalizedAmounts = normalizeBookingAmounts(payload);
+    const normalizedPayload = {
+      ...payload,
+      ...normalizedAmounts,
+      vendorAmount: normalizedAmounts.amount,
+      settledAmount: Number(payload.settledAmount || 0),
+      pendingSettlement: Math.max(0, normalizedAmounts.amount - Number(payload.settledAmount || 0)),
+    };
+
     let booking;
 
     if (
@@ -193,9 +263,9 @@ export const bookingService = {
       const vendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
         ? await resolveVendorIdForAuthUser(authUser)
         : await resolveVendorIdForScopedUser(authUser);
-      booking = await bookingRepository.create({ ...payload, vendorId });
+      booking = await bookingRepository.create({ ...normalizedPayload, vendorId });
     } else {
-      booking = await bookingRepository.create(payload);
+      booking = await bookingRepository.create(normalizedPayload);
     }
 
     setImmediate(() => {
@@ -214,28 +284,6 @@ export const bookingService = {
       },
       "Queued booking notification dispatch",
     );
-
-    if (booking) {
-      const amount = Number((booking as { amount?: unknown }).amount || 0);
-      const paidAmount = Number(
-        (booking as { paidAmount?: unknown; advancePaid?: unknown }).paidAmount ||
-          (booking as { advancePaid?: unknown }).advancePaid ||
-          0,
-      );
-      const dueAmount = Math.max(0, amount - paidAmount);
-
-      await bookingRepository.updateById(String(booking.id), {
-        paidAmount,
-        dueAmount,
-        bookingStatus: (booking as { bookingStatus?: unknown }).bookingStatus || "upcoming",
-        vendorAmount: amount,
-        settledAmount: Number((booking as { settledAmount?: unknown }).settledAmount || 0),
-        pendingSettlement: Math.max(
-          0,
-          amount - Number((booking as { settledAmount?: unknown }).settledAmount || 0),
-        ),
-      });
-    }
 
     return booking;
   },
@@ -297,6 +345,31 @@ export const bookingService = {
           `Invalid booking status transition from ${existing.bookingStatus} to ${payload.bookingStatus}`,
         );
       }
+
+      const effectiveEventDate =
+        payload.eventDate !== undefined
+          ? payload.eventDate
+          : (existing as { eventDate?: unknown }).eventDate;
+      if (payload.bookingStatus === "completed" && isFutureEventDate(effectiveEventDate)) {
+        throw new ApiError(400, "Booking can be marked completed only on or after event date");
+      }
+    }
+
+    if (
+      payload.amount !== undefined ||
+      payload.advancePaid !== undefined ||
+      payload.paidAmount !== undefined ||
+      payload.dueAmount !== undefined
+    ) {
+      const mergedAmounts = normalizeBookingAmounts({
+        amount: payload.amount ?? existing.amount,
+        advancePaid: payload.advancePaid ?? existing.advancePaid,
+        paidAmount: payload.paidAmount ?? existing.paidAmount,
+      });
+      payload.amount = mergedAmounts.amount;
+      payload.advancePaid = mergedAmounts.advancePaid;
+      payload.paidAmount = mergedAmounts.paidAmount;
+      payload.dueAmount = mergedAmounts.dueAmount;
     }
 
     const booking = await bookingRepository.updateById(bookingId, payload);
@@ -426,13 +499,16 @@ export const bookingService = {
       Array.from(new Set([...referralVendorIds, ...bookingVendorIds])),
     );
     const vendorMap = new Map(
-      vendorRows.map((vendor) => [
-        String(vendor._id),
-        {
-          businessName: String(vendor.businessName || ""),
-          referralCode: String(vendor.referralCode || ""),
-        },
-      ]),
+      vendorRows.map((vendor) => {
+        const row = vendor.toObject() as Record<string, unknown>;
+        return [
+          String(vendor._id),
+          {
+            businessName: String(vendor.businessName || ""),
+            referralCode: String(row.referralCode || ""),
+          },
+        ];
+      }),
     );
 
     const leaderboard = leaderboardRows.map((row, index) => {

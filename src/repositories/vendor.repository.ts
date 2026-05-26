@@ -5,6 +5,17 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 export const vendorRepository = {
   create: (payload: Record<string, unknown>) => VendorModel.create(payload),
   findByUserId: (userId: string) => VendorModel.findOne({ userId }),
+  findByIds: (ids: string[]) =>
+    VendorModel.find({
+      _id: { $in: ids },
+    }),
+  findByReferralCode: (referralCode: string) =>
+    VendorModel.findOne({
+      referralCode: String(referralCode || "")
+        .trim()
+        .toUpperCase(),
+      profileType: { $ne: "venue_owner_shadow" },
+    }),
   findByEmailOrMobile: (email?: string | null, mobile?: string | null) => {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
     const normalizedMobile = typeof mobile === "string" ? mobile.trim() : "";
@@ -28,8 +39,7 @@ export const vendorRepository = {
   },
   findAll: (filters: Record<string, unknown> = {}) => {
     const query: Record<string, unknown> = {};
-    const includeInactive =
-      filters.includeInactive === true || String(filters.includeInactive || "") === "true";
+    const includeInactive = filters.includeInactive === true;
     query.profileType = { $ne: "venue_owner_shadow" };
 
     if (!includeInactive) {
@@ -42,7 +52,30 @@ export const vendorRepository = {
     }
 
     if (typeof filters.subCategory === "string" && filters.subCategory.trim()) {
-      query.subCategory = new RegExp(`^${escapeRegExp(filters.subCategory.trim())}$`, "i");
+      const subCategoryRegex = new RegExp(`^${escapeRegExp(filters.subCategory.trim())}$`, "i");
+      const currentAnd = Array.isArray(query.$and) ? query.$and : [];
+      query.$and = [
+        ...currentAnd,
+        {
+          $or: [{ subCategory: subCategoryRegex }, { subCategories: { $in: [subCategoryRegex] } }],
+        },
+      ];
+    }
+
+    if (Array.isArray(filters.subCategories) && filters.subCategories.length) {
+      const normalized = filters.subCategories
+        .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+        .map((item) => new RegExp(`^${escapeRegExp(item.trim())}$`, "i"));
+
+      if (normalized.length) {
+        const currentAnd = Array.isArray(query.$and) ? query.$and : [];
+        query.$and = [
+          ...currentAnd,
+          {
+            $or: [{ subCategory: { $in: normalized } }, { subCategories: { $in: normalized } }],
+          },
+        ];
+      }
     }
 
     if (typeof filters.state === "string" && filters.state.trim()) {
@@ -50,16 +83,7 @@ export const vendorRepository = {
     }
 
     if (typeof filters.district === "string" && filters.district.trim()) {
-      const districtRegex = new RegExp(`^${escapeRegExp(filters.district.trim())}$`, "i");
-      query.$or = [
-        ...((query.$or as Record<string, unknown>[]) || []),
-        {
-          district: districtRegex,
-        },
-        {
-          serviceZones: { $in: [districtRegex] },
-        },
-      ];
+      query.district = new RegExp(`^${escapeRegExp(filters.district.trim())}$`, "i");
     }
 
     if (typeof filters.city === "string" && filters.city.trim()) {
@@ -88,21 +112,15 @@ export const vendorRepository = {
 
     if (typeof filters.search === "string" && filters.search.trim()) {
       const searchRegex = new RegExp(escapeRegExp(filters.search.trim()), "i");
-      const searchableOr = [
+      query.$or = [
         { businessName: searchRegex },
         { ownerName: searchRegex },
         { category: searchRegex },
         { subCategory: searchRegex },
+        { subCategories: { $in: [searchRegex] } },
         { city: searchRegex },
         { serviceZones: { $in: [searchRegex] } },
       ];
-
-      if (Array.isArray(query.$or) && query.$or.length) {
-        query.$and = [{ $or: query.$or }, { $or: searchableOr }];
-        delete query.$or;
-      } else {
-        query.$or = searchableOr;
-      }
     }
 
     const limit =
@@ -111,14 +129,6 @@ export const vendorRepository = {
     return VendorModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
   findById: (id: string) => VendorModel.findById(id),
-  findByIds: (ids: string[]) =>
-    VendorModel.find({
-      _id: {
-        $in: ids,
-      },
-    }),
-  findByReferralCode: (referralCode: string) =>
-    VendorModel.findOne({ referralCode: referralCode.trim().toUpperCase() }),
   updateById: (id: string, payload: Record<string, unknown>) =>
     VendorModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),
   deleteById: (id: string) => VendorModel.findByIdAndDelete(id),

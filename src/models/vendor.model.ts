@@ -9,6 +9,7 @@ const vendorSchema = new Schema(
     mobile: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
     subCategory: { type: String, required: true, trim: true },
+    subCategories: { type: [String], default: [] },
     state: { type: String, default: "", trim: true },
     district: { type: String, default: "", trim: true },
     city: { type: String, required: true, trim: true },
@@ -53,8 +54,6 @@ const vendorSchema = new Schema(
     reviewCount: { type: Number, default: 0, min: 0 },
     isVerified: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
-    referralCode: { type: String, default: "", trim: true, uppercase: true },
-    referralCodeAssignedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
@@ -64,6 +63,7 @@ vendorSchema.index({ userId: 1 }, { unique: true, sparse: true });
 vendorSchema.index({ state: 1, district: 1, city: 1 });
 vendorSchema.index({ city: 1 });
 vendorSchema.index({ subCategory: 1 });
+vendorSchema.index({ subCategories: 1 });
 vendorSchema.index({ isVerified: 1 });
 vendorSchema.index({ approvalStatus: 1, isActive: 1 });
 vendorSchema.index({ registrationSource: 1 });
@@ -71,6 +71,5 @@ vendorSchema.index({ mobile: 1 });
 vendorSchema.index({ email: 1 });
 vendorSchema.index({ profileType: 1 });
 vendorSchema.index({ category: 1, subCategory: 1, pricingModel: 1 });
-vendorSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
 
 export const VendorModel = model("Vendor", vendorSchema);

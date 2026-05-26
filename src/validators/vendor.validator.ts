@@ -185,3 +185,11 @@ export const vendorListSchema = z.object({
   }),
   params: z.object({}).default({}),
 });
+
+export const vendorReferralCodeValidationSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
+  params: z.object({
+    code: z.string().trim().min(3).max(32),
+  }),
+});

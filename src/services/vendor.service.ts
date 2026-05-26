@@ -443,6 +443,26 @@ export const vendorService = {
       };
     });
   },
+  validateReferralCode: async (code: string) => {
+    const normalizedCode = normalizeText(code).toUpperCase();
+    if (!normalizedCode) {
+      return { valid: false, vendor: null };
+    }
+
+    const vendor = await vendorRepository.findByReferralCode(normalizedCode);
+    if (!vendor || !vendor.isActive || normalizeText(vendor.approvalStatus) !== "active") {
+      return { valid: false, vendor: null };
+    }
+
+    return {
+      valid: true,
+      vendor: {
+        _id: String(vendor._id),
+        businessName: String(vendor.businessName || ""),
+        referralCode: String(vendor.referralCode || normalizedCode),
+      },
+    };
+  },
   getVendorById: async (vendorId: string, includeInactive = false) => {
     const vendor = await vendorRepository.findById(vendorId);
     if (!vendor) {

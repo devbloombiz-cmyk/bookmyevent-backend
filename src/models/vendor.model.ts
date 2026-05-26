@@ -43,6 +43,8 @@ const vendorSchema = new Schema(
     },
     pricingAmount: { type: Number, default: 0, min: 0 },
     registrationSource: { type: String, enum: ["admin", "public"], default: "public" },
+    referralCode: { type: String, default: "", trim: true, uppercase: true },
+    referralCodeAssignedAt: { type: Date, default: null },
     approvalStatus: {
       type: String,
       enum: ["pending", "active", "disabled"],
@@ -71,5 +73,6 @@ vendorSchema.index({ mobile: 1 });
 vendorSchema.index({ email: 1 });
 vendorSchema.index({ profileType: 1 });
 vendorSchema.index({ category: 1, subCategory: 1, pricingModel: 1 });
+vendorSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
 
 export const VendorModel = model("Vendor", vendorSchema);

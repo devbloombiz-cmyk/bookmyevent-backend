@@ -5,13 +5,8 @@ import { asyncHandler } from "../utils/async-handler";
 
 export const venueOwnerController = {
   createVenueOwner: asyncHandler(async (req, res) => {
-    const isPrivilegedRequester = Boolean(
-      req.authUser?.permissions?.includes(PermissionKeys.WorkspaceAdminAccess),
-    );
-
     const venueOwner = await venueOwnerService.createVenueOwner(req.body, {
       requestedByRole: req.authUser?.role,
-      isPrivilegedRequester,
     });
     return sendSuccess(res, "Venue owner created", { venueOwner }, 201);
   }),

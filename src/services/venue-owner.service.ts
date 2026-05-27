@@ -582,7 +582,7 @@ const syncLocationIfPresent = async (payload: Record<string, unknown>) => {
 export const venueOwnerService = {
   createVenueOwner: async (
     payload: Record<string, unknown>,
-    options?: { requestedByRole?: UserRole; isPrivilegedRequester?: boolean },
+    options?: { requestedByRole?: UserRole },
   ) => {
     const normalizedPayload = normalizePayload(payload, { partial: false });
     const normalizedEmail = normalizeText(normalizedPayload.email).toLowerCase();
@@ -594,10 +594,9 @@ export const venueOwnerService = {
     });
 
     const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
-    const isPrivilegedCreator = Boolean(
-      options?.isPrivilegedRequester ||
-      (options?.requestedByRole ? privilegedCreatorRoles.includes(options.requestedByRole) : false),
-    );
+    const isPrivilegedCreator = options?.requestedByRole
+      ? privilegedCreatorRoles.includes(options.requestedByRole)
+      : false;
 
     normalizedPayload.registrationSource = isPrivilegedCreator ? "admin" : "public";
 
@@ -611,35 +610,17 @@ export const venueOwnerService = {
       normalizedPayload.isActive = true;
     }
 
-    await syncLocationIfPresent(normalizedPayload);
+    const [linkedUser] = await Promise.all([
+      ensureVenueOwnerUserAccount(normalizedPayload),
+      syncLocationIfPresent(normalizedPayload),
+    ]);
 
-    const venueOwner = await venueOwnerRepository.create(normalizedPayload);
-
-    try {
-      const linkedUser = await ensureVenueOwnerUserAccount(normalizedPayload);
-      if (linkedUser?._id) {
-        await venueOwnerRepository.updateById(String(venueOwner._id), {
-          userId: linkedUser._id,
-        });
-      }
-
-      await syncVenueOwnerUserStatus(
-        {
-          ...venueOwner.toObject(),
-          ...(linkedUser?._id ? { userId: linkedUser._id } : {}),
-        },
-        normalizedPayload,
-      );
-    } catch (error) {
-      logger.warn(
-        {
-          venueOwnerId: String(venueOwner._id),
-          error,
-        },
-        "Venue owner created without linked user account",
-      );
+    if (linkedUser?._id) {
+      normalizedPayload.userId = linkedUser._id;
     }
 
+    const venueOwner = await venueOwnerRepository.create(normalizedPayload);
+    await syncVenueOwnerUserStatus(venueOwner.toObject(), normalizedPayload);
     return venueOwnerRepository.findById(String(venueOwner._id));
   },
   listVenueOwners: async (filters: Record<string, unknown>) => {

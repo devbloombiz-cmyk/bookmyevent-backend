@@ -34,6 +34,28 @@ export const vendorController = {
     const validation = await vendorService.validateReferralCode(code);
     return sendSuccess(res, "Referral code validation completed", validation);
   }),
+  listMyReferralVendors: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Referral vendor list fetched", {
+        summary: {
+          totalReferredVendors: 0,
+          activeReferredVendors: 0,
+          pendingReferredVendors: 0,
+        },
+        vendors: [],
+      });
+    }
+
+    const limit = typeof req.query.limit === "number" ? req.query.limit : undefined;
+    const data = await vendorService.listMyReferredVendors({ id: authUser.id }, limit);
+    return sendSuccess(res, "Referral vendor list fetched", data);
+  }),
+  listAdminReferralVendors: asyncHandler(async (req, res) => {
+    const limit = typeof req.query.limit === "number" ? req.query.limit : undefined;
+    const data = await vendorService.listAdminReferralVendors(limit);
+    return sendSuccess(res, "Admin referral vendor list fetched", data);
+  }),
   getMyVendorProfile: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {

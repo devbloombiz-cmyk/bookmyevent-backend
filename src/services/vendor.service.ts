@@ -342,6 +342,35 @@ const toDistrictOnlyServiceZones = (district: unknown) => {
   return normalizedDistrict ? [normalizedDistrict] : [];
 };
 
+const toSingleSubCategory = (payload: {
+  subCategories?: unknown;
+  subCategory?: unknown;
+  fallbackSubCategories?: unknown;
+  fallbackSubCategory?: unknown;
+}) => {
+  const directSubCategories = normalizeSubCategories(payload.subCategories);
+  const fallbackSubCategories = normalizeSubCategories(payload.fallbackSubCategories);
+  const directSubCategory = normalizeText(payload.subCategory);
+  const fallbackSubCategory = normalizeText(payload.fallbackSubCategory);
+
+  const source =
+    directSubCategories.length > 0
+      ? directSubCategories
+      : fallbackSubCategories.length > 0
+        ? fallbackSubCategories
+        : directSubCategory
+          ? [directSubCategory]
+          : fallbackSubCategory
+            ? [fallbackSubCategory]
+            : [];
+
+  const first = source[0] || "";
+  return {
+    subCategory: first,
+    subCategories: first ? [first] : [],
+  };
+};
+
 const enforceVendorServiceZonePolicy = (
   normalizedPayload: Record<string, unknown>,
   options: { allowMultiple: boolean; fallbackDistrict?: unknown },
@@ -355,6 +384,89 @@ const enforceVendorServiceZonePolicy = (
 
   normalizedPayload.serviceZones = toDistrictOnlyServiceZones(districtSource);
 };
+
+const enforceVendorSubCategoryPolicy = (
+  normalizedPayload: Record<string, unknown>,
+  options: {
+    allowMultiple: boolean;
+    partial?: boolean;
+    fallbackSubCategories?: unknown;
+    fallbackSubCategory?: unknown;
+  },
+) => {
+  if (options.allowMultiple) {
+    return;
+  }
+
+  const shouldApply =
+    !options.partial || "subCategory" in normalizedPayload || "subCategories" in normalizedPayload;
+  if (!shouldApply) {
+    return;
+  }
+
+  const normalized = toSingleSubCategory({
+    subCategory: normalizedPayload.subCategory,
+    subCategories: normalizedPayload.subCategories,
+    fallbackSubCategory: options.fallbackSubCategory,
+    fallbackSubCategories: options.fallbackSubCategories,
+  });
+
+  normalizedPayload.subCategory = normalized.subCategory;
+  normalizedPayload.subCategories = normalized.subCategories;
+};
+
+const resolveReferralAttribution = async (options: {
+  code?: unknown;
+  email?: unknown;
+  mobile?: unknown;
+}) => {
+  const rawCode = normalizeText(options.code).toUpperCase();
+  if (!rawCode) {
+    return {
+      referredByVendorId: null,
+      referredByReferralCode: "",
+      referralAttributedAt: null,
+    };
+  }
+
+  const referrer = await vendorRepository.findByReferralCode(rawCode);
+  if (!referrer || !referrer.isActive || normalizeText(referrer.approvalStatus) !== "active") {
+    throw new ApiError(400, "Invalid referral code");
+  }
+
+  const normalizedEmail = normalizeText(options.email).toLowerCase();
+  const normalizedMobile = normalizeText(options.mobile);
+  const isSelfReferral =
+    (!!normalizedEmail && normalizedEmail === normalizeText(referrer.email).toLowerCase()) ||
+    (!!normalizedMobile && normalizedMobile === normalizeText(referrer.mobile));
+
+  if (isSelfReferral) {
+    throw new ApiError(400, "Self referral is not allowed");
+  }
+
+  return {
+    referredByVendorId: String(referrer._id),
+    referredByReferralCode: String(referrer.referralCode || rawCode),
+    referralAttributedAt: new Date(),
+  };
+};
+
+const mapReferredVendor = (vendor: Record<string, unknown>) => ({
+  _id: String(vendor._id || ""),
+  businessName: String(vendor.businessName || ""),
+  ownerName: String(vendor.ownerName || ""),
+  email: String(vendor.email || ""),
+  mobile: String(vendor.mobile || ""),
+  category: String(vendor.category || ""),
+  subCategory: String(vendor.subCategory || ""),
+  district: String(vendor.district || ""),
+  city: String(vendor.city || ""),
+  approvalStatus: String(vendor.approvalStatus || "pending"),
+  isActive: Boolean(vendor.isActive),
+  referredByVendorId: vendor.referredByVendorId ? String(vendor.referredByVendorId) : "",
+  referredByReferralCode: String(vendor.referredByReferralCode || ""),
+  createdAt: String(vendor.createdAt || ""),
+});
 
 export const vendorService = {
   createVendor: async (
@@ -371,6 +483,18 @@ export const vendorService = {
       allowMultiple: false,
       fallbackDistrict: normalizedPayload.district,
     });
+    enforceVendorSubCategoryPolicy(normalizedPayload, {
+      allowMultiple: false,
+    });
+
+    const referralAttribution = await resolveReferralAttribution({
+      code: normalizedPayload.referredByReferralCode,
+      email: normalizedPayload.email,
+      mobile: normalizedPayload.mobile,
+    });
+    normalizedPayload.referredByVendorId = referralAttribution.referredByVendorId;
+    normalizedPayload.referredByReferralCode = referralAttribution.referredByReferralCode;
+    normalizedPayload.referralAttributedAt = referralAttribution.referralAttributedAt;
 
     const privilegedCreatorRoles: UserRole[] = ["super_admin", "vendor_admin", "accounts_admin"];
     const isPrivilegedCreator = options?.requestedByRole
@@ -532,6 +656,12 @@ export const vendorService = {
         fallbackDistrict:
           "district" in normalizedPayload ? normalizedPayload.district : vendorByUserId.district,
       });
+      enforceVendorSubCategoryPolicy(normalizedPayload, {
+        allowMultiple: isSubscribedPro,
+        partial: true,
+        fallbackSubCategory: vendorByUserId.subCategory,
+        fallbackSubCategories: vendorByUserId.subCategories,
+      });
 
       if (Array.isArray(normalizedPayload.portfolioImages)) {
         await subscriptionService.assertWithinLimit(
@@ -604,6 +734,12 @@ export const vendorService = {
       fallbackDistrict:
         "district" in normalizedPayload ? normalizedPayload.district : vendor.district,
     });
+    enforceVendorSubCategoryPolicy(normalizedPayload, {
+      allowMultiple: isSubscribedPro,
+      partial: true,
+      fallbackSubCategory: vendor.subCategory,
+      fallbackSubCategories: vendor.subCategories,
+    });
 
     if (Array.isArray(normalizedPayload.portfolioImages)) {
       await subscriptionService.assertWithinLimit(
@@ -675,6 +811,12 @@ export const vendorService = {
       fallbackDistrict:
         "district" in normalizedPayload ? normalizedPayload.district : existingVendor.district,
     });
+    enforceVendorSubCategoryPolicy(normalizedPayload, {
+      allowMultiple: allowExtendedMedia,
+      partial: true,
+      fallbackSubCategory: existingVendor.subCategory,
+      fallbackSubCategories: existingVendor.subCategories,
+    });
 
     if (!allowExtendedMedia) {
       if ("portfolioImages" in normalizedPayload) {
@@ -730,5 +872,65 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
     return vendor;
+  },
+  listMyReferredVendors: async (authUser: Pick<AuthenticatedUser, "id">, limit = 200) => {
+    const vendor = await vendorService.getMyVendorProfile(authUser);
+    const referrals = await vendorRepository.findByReferredByVendorId(String(vendor._id), limit);
+    const rows = referrals.map((item) =>
+      mapReferredVendor(item.toObject() as Record<string, unknown>),
+    );
+
+    return {
+      summary: {
+        totalReferredVendors: rows.length,
+        activeReferredVendors: rows.filter((item) => item.isActive).length,
+        pendingReferredVendors: rows.filter((item) => item.approvalStatus === "pending").length,
+      },
+      referralCode: String(vendor.referralCode || ""),
+      vendors: rows,
+    };
+  },
+  listAdminReferralVendors: async (limit = 500) => {
+    const rows = await vendorRepository.findReferralAttributedVendors(limit);
+    const referralVendorIds = Array.from(
+      new Set(
+        rows
+          .map((item) => (item.referredByVendorId ? String(item.referredByVendorId) : ""))
+          .filter(Boolean),
+      ),
+    );
+
+    const referralVendors = referralVendorIds.length
+      ? await vendorRepository.findByIds(referralVendorIds)
+      : [];
+    const referralVendorMap = new Map(
+      referralVendors.map((item) => [
+        String(item._id),
+        {
+          _id: String(item._id),
+          businessName: String(item.businessName || ""),
+          referralCode: String(item.referralCode || ""),
+        },
+      ]),
+    );
+
+    const mapped = rows.map((item) => {
+      const raw = mapReferredVendor(item.toObject() as Record<string, unknown>);
+      return {
+        ...raw,
+        referredByVendor: raw.referredByVendorId
+          ? referralVendorMap.get(raw.referredByVendorId) || null
+          : null,
+      };
+    });
+
+    return {
+      summary: {
+        totalReferredVendors: mapped.length,
+        activeReferredVendors: mapped.filter((item) => item.isActive).length,
+        pendingReferredVendors: mapped.filter((item) => item.approvalStatus === "pending").length,
+      },
+      vendors: mapped,
+    };
   },
 };

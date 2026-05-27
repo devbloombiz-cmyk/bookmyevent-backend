@@ -5,9 +5,11 @@ import { attachAuthIfPresent, requireAuth } from "../middlewares/auth.middleware
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
+  vendorAdminReferralVendorsSchema,
   vendorCreateSchema,
   vendorDeleteSchema,
   vendorListSchema,
+  vendorMyReferralVendorsSchema,
   vendorReferralCodeValidationSchema,
   vendorSelfUpdateSchema,
   vendorUpdateSchema,
@@ -31,6 +33,20 @@ vendorRouter.get(
   "/referral-code/:code",
   validateRequest(vendorReferralCodeValidationSchema),
   vendorController.validateReferralCode,
+);
+vendorRouter.get(
+  "/referrals/me",
+  requireAuth,
+  authorize([PermissionKeys.VendorRead, PermissionKeys.VendorUpdateOwn]),
+  validateRequest(vendorMyReferralVendorsSchema),
+  vendorController.listMyReferralVendors,
+);
+vendorRouter.get(
+  "/referrals/admin",
+  requireAuth,
+  authorize([PermissionKeys.WorkspaceAdminAccess, PermissionKeys.VendorRead]),
+  validateRequest(vendorAdminReferralVendorsSchema),
+  vendorController.listAdminReferralVendors,
 );
 vendorRouter.get("/:vendorId", validateRequest(vendorDeleteSchema), vendorController.getVendorById);
 vendorRouter.post(
@@ -60,5 +76,4 @@ vendorRouter.delete(
   validateRequest(vendorDeleteSchema),
   vendorController.deleteVendor,
 );
-
 export { vendorRouter };

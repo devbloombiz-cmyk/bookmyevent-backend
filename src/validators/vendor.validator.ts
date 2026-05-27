@@ -32,6 +32,7 @@ export const vendorCreateSchema = z.object({
       category: z.string().min(2),
       subCategory: z.string().min(2).optional(),
       subCategories: z.array(z.string().min(2)).optional(),
+      referredByReferralCode: z.string().trim().min(3).max(32).optional(),
       state: z.string().optional().default(""),
       district: z.string().optional().default(""),
       city: z.string().min(2),
@@ -192,4 +193,20 @@ export const vendorReferralCodeValidationSchema = z.object({
   params: z.object({
     code: z.string().trim().min(3).max(32),
   }),
+});
+
+export const vendorMyReferralVendorsSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(1000).optional(),
+  }),
+  params: z.object({}).default({}),
+});
+
+export const vendorAdminReferralVendorsSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({
+    limit: z.coerce.number().int().min(1).max(2000).optional(),
+  }),
+  params: z.object({}).default({}),
 });

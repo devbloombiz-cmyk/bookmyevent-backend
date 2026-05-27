@@ -36,7 +36,7 @@ const resolveBookingAgainstForVendor = async (options: {
     return "package";
   }
 
-  return normalizeBookingAgainst((vendor as Record<string, unknown>).bookingAgainst);
+  return normalizeBookingAgainst(vendor.get("bookingAgainst"));
 };
 
 export const bookingPolicyService = {

@@ -53,6 +53,7 @@ export const vendorCreateSchema = z.object({
         .enum(["base_package", "per_day", "per_plate"])
         .optional()
         .default("base_package"),
+      bookingAgainst: z.enum(["vendor", "package"]).optional().default("package"),
       pricingAmount: z.number().min(0).optional().default(0),
       approvalStatus: z.enum(["pending", "active", "disabled"]).optional().default("active"),
       coverImage: z
@@ -104,6 +105,7 @@ export const vendorUpdateSchema = z.object({
       travelCost: z.string().optional(),
       deliveryTime: z.string().optional(),
       pricingModel: z.enum(["base_package", "per_day", "per_plate"]).optional(),
+      bookingAgainst: z.enum(["vendor", "package"]).optional(),
       pricingAmount: z.number().min(0).optional(),
       approvalStatus: z.enum(["pending", "active", "disabled"]).optional(),
       coverImage: z.union([z.url(), z.literal("")]).optional(),
@@ -150,6 +152,7 @@ export const vendorSelfUpdateSchema = z.object({
       travelCost: z.string().optional(),
       deliveryTime: z.string().optional(),
       pricingModel: z.enum(["base_package", "per_day", "per_plate"]).optional(),
+      bookingAgainst: z.enum(["vendor", "package"]).optional(),
       pricingAmount: z.number().min(0).optional(),
       coverImage: z.union([z.url(), z.literal("")]).optional(),
       portfolioImages: z.array(z.url()).optional(),

@@ -59,6 +59,9 @@ const textFields = [
   "profileType",
 ] as const;
 
+const normalizeBookingAgainst = (value: unknown): "vendor" | "package" =>
+  normalizeText(value).toLowerCase() === "vendor" ? "vendor" : "package";
+
 const buildNormalizedVendorPayload = (
   payload: Record<string, unknown>,
   options: { partial: boolean },
@@ -77,6 +80,14 @@ const buildNormalizedVendorPayload = (
 
   if (!options.partial || "mobile" in payload) {
     normalized.mobile = normalizeText(payload.mobile);
+  }
+
+  if (!options.partial) {
+    normalized.bookingAgainst = "package";
+  }
+
+  if ("bookingAgainst" in payload) {
+    normalized.bookingAgainst = normalizeBookingAgainst(payload.bookingAgainst);
   }
 
   if (!options.partial || "serviceZones" in payload) {

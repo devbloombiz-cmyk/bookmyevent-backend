@@ -41,6 +41,11 @@ const vendorSchema = new Schema(
       enum: ["base_package", "per_day", "per_plate"],
       default: "base_package",
     },
+    bookingAgainst: {
+      type: String,
+      enum: ["vendor", "package"],
+      default: "package",
+    },
     pricingAmount: { type: Number, default: 0, min: 0 },
     registrationSource: { type: String, enum: ["admin", "public"], default: "public" },
     referralCode: { type: String, default: "", trim: true, uppercase: true },
@@ -76,6 +81,7 @@ vendorSchema.index({ mobile: 1 });
 vendorSchema.index({ email: 1 });
 vendorSchema.index({ profileType: 1 });
 vendorSchema.index({ category: 1, subCategory: 1, pricingModel: 1 });
+vendorSchema.index({ bookingAgainst: 1 });
 vendorSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
 vendorSchema.index({ referredByVendorId: 1, createdAt: -1 });
 

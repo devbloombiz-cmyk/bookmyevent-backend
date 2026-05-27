@@ -13,6 +13,7 @@ import { logger } from "../config/logger";
 import { paymentRequestService } from "./payment-request.service";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
 import { vendorRepository } from "../repositories/vendor.repository";
+import { bookingPolicyService } from "./booking-policy.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -367,6 +368,13 @@ export const leadService = {
 
     const paidAmount = payload.advancePaid ?? 0;
     const dueAmount = Math.max(0, payload.amount - paidAmount);
+
+    await bookingPolicyService.assertBookingConflictFree({
+      vendorId: String(lead.vendorId),
+      packageId: payload.packageId,
+      eventDate: new Date(lead.eventDate),
+      venueOwnerId: lead.venueOwnerId ? String(lead.venueOwnerId) : null,
+    });
 
     const booking = await bookingRepository.create({
       customerId: lead.customerId ?? null,

@@ -15,6 +15,7 @@ import { activityTimelineService } from "./activity-timeline.service";
 import { leadRepository } from "../repositories/lead.repository";
 import { userRepository } from "../repositories/user.repository";
 import { vendorRepository } from "../repositories/vendor.repository";
+import { bookingPolicyService } from "./booking-policy.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -246,7 +247,7 @@ export const bookingService = {
     }
 
     const normalizedAmounts = normalizeBookingAmounts(payload);
-    const normalizedPayload = {
+    const normalizedPayload: Record<string, unknown> = {
       ...payload,
       ...normalizedAmounts,
       vendorAmount: normalizedAmounts.amount,
@@ -254,16 +255,36 @@ export const bookingService = {
       pendingSettlement: Math.max(0, normalizedAmounts.amount - Number(payload.settledAmount || 0)),
     };
 
+    let targetVendorId = String(normalizedPayload["vendorId"] || "");
+    if (
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
+      targetVendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
+        ? await resolveVendorIdForAuthUser(authUser)
+        : await resolveVendorIdForScopedUser(authUser);
+    }
+
+    const nextBookingStatus = String(normalizedPayload["bookingStatus"] || "upcoming");
+    if (nextBookingStatus !== "cancelled") {
+      const leadId = String(normalizedPayload["leadId"] || "");
+      const lead = leadId ? await leadRepository.findById(leadId) : null;
+
+      await bookingPolicyService.assertBookingConflictFree({
+        vendorId: targetVendorId,
+        packageId: String(normalizedPayload["packageId"] || ""),
+        eventDate: new Date(String(normalizedPayload["eventDate"] || "")),
+        venueOwnerId: lead?.venueOwnerId ? String(lead.venueOwnerId) : null,
+      });
+    }
+
     let booking;
 
     if (
       authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
       authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
     ) {
-      const vendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
-        ? await resolveVendorIdForAuthUser(authUser)
-        : await resolveVendorIdForScopedUser(authUser);
-      booking = await bookingRepository.create({ ...normalizedPayload, vendorId });
+      booking = await bookingRepository.create({ ...normalizedPayload, vendorId: targetVendorId });
     } else {
       booking = await bookingRepository.create(normalizedPayload);
     }
@@ -370,6 +391,28 @@ export const bookingService = {
       payload.advancePaid = mergedAmounts.advancePaid;
       payload.paidAmount = mergedAmounts.paidAmount;
       payload.dueAmount = mergedAmounts.dueAmount;
+    }
+
+    const effectiveBookingStatus = String(payload.bookingStatus ?? existing.bookingStatus);
+    const shouldValidateConflict =
+      effectiveBookingStatus !== "cancelled" &&
+      (payload.eventDate !== undefined || payload.bookingStatus !== undefined);
+
+    if (shouldValidateConflict) {
+      const eventDate =
+        payload.eventDate !== undefined
+          ? new Date(String(payload.eventDate))
+          : new Date(String(existing.eventDate));
+
+      const packageId = String(existing.packageId || "");
+      const vendorId = String(existing.vendorId || "");
+
+      await bookingPolicyService.assertBookingConflictFree({
+        vendorId,
+        packageId,
+        eventDate,
+        excludeBookingId: bookingId,
+      });
     }
 
     const booking = await bookingRepository.updateById(bookingId, payload);

@@ -16,6 +16,7 @@ import {
 } from "./vendor-identity.service";
 import { activityTimelineService } from "./activity-timeline.service";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
+import { bookingPolicyService } from "./booking-policy.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -903,6 +904,13 @@ export const paymentRequestService = {
     const customerEmail =
       String(lead.customerEmail || "").trim() ||
       extractFromMessage(String(lead.message || ""), "Email");
+
+    await bookingPolicyService.assertBookingConflictFree({
+      vendorId: String(lead.vendorId),
+      packageId: String(mappedAdvance.packageId),
+      eventDate: new Date(lead.eventDate),
+      venueOwnerId: lead.venueOwnerId ? String(lead.venueOwnerId) : null,
+    });
 
     const booking = await bookingRepository.create({
       customerId: lead.customerId ?? null,

@@ -11,6 +11,7 @@
     "seed:admin": "tsx src/scripts/seed-admin.ts",
     "seed:locations": "tsx src/scripts/seed-locations.ts",
     "repair:bookings:customer-fields": "tsx src/scripts/backfill-booking-customer-fields.ts",
+    "migrate:vendor-referral-index": "tsx src/scripts/migrate-vendor-referral-index.ts",
     "test:redirect-matrix": "tsx src/scripts/redirect-matrix.ts",
     "test:subscriptions:razorpay": "tsx --test src/tests/confirm-razorpay.integration.test.ts",
     "lint": "eslint .",

@@ -68,6 +68,10 @@ const buildNormalizedVendorPayload = (
 ) => {
   const normalized: Record<string, unknown> = { ...payload };
 
+  // referralCode is system-managed and assigned only after eligible subscription activation.
+  delete normalized.referralCode;
+  delete normalized.referralCodeAssignedAt;
+
   for (const field of textFields) {
     if (!options.partial || field in payload) {
       normalized[field] = normalizeText(payload[field]);

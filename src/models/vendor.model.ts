@@ -48,7 +48,7 @@ const vendorSchema = new Schema(
     },
     pricingAmount: { type: Number, default: 0, min: 0 },
     registrationSource: { type: String, enum: ["admin", "public"], default: "public" },
-    referralCode: { type: String, default: "", trim: true, uppercase: true },
+    referralCode: { type: String, default: undefined, trim: true, uppercase: true },
     referralCodeAssignedAt: { type: Date, default: null },
     referredByVendorId: { type: Schema.Types.ObjectId, ref: "Vendor", default: null },
     referredByReferralCode: { type: String, default: "", trim: true, uppercase: true },
@@ -82,7 +82,15 @@ vendorSchema.index({ email: 1 });
 vendorSchema.index({ profileType: 1 });
 vendorSchema.index({ category: 1, subCategory: 1, pricingModel: 1 });
 vendorSchema.index({ bookingAgainst: 1 });
-vendorSchema.index({ referralCode: 1 }, { unique: true, sparse: true });
+vendorSchema.index(
+  { referralCode: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      referralCode: { $type: "string", $ne: "" },
+    },
+  },
+);
 vendorSchema.index({ referredByVendorId: 1, createdAt: -1 });
 
 export const VendorModel = model("Vendor", vendorSchema);

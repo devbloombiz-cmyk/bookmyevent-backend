@@ -28,6 +28,12 @@ const toUtcDateRange = (value: Date) => {
   return { start, end };
 };
 
+const normalizeId = (value?: string | null) => String(value || "").trim();
+const normalizeMobile = (value?: string | null) =>
+  String(value || "")
+    .trim()
+    .replace(/\D/g, "");
+
 export const bookingRepository = {
   create: (payload: Record<string, unknown>) => BookingModel.create(payload),
   findAll: () => BookingModel.find().sort({ createdAt: -1 }),
@@ -103,6 +109,45 @@ export const bookingRepository = {
       packageId,
       eventDate: { $gte: start, $lte: end },
       bookingStatus: { $ne: "cancelled" },
+      ...(options?.excludeBookingId
+        ? {
+            _id: {
+              $ne: options.excludeBookingId,
+            },
+          }
+        : {}),
+    });
+  },
+  findActiveByVendorCustomerAndDate: (
+    vendorId: string,
+    eventDate: Date,
+    options?: {
+      customerId?: string | null;
+      customerMobile?: string | null;
+      excludeBookingId?: string;
+    },
+  ) => {
+    const { start, end } = toUtcDateRange(eventDate);
+    const normalizedCustomerId = normalizeId(options?.customerId);
+    const normalizedCustomerMobile = normalizeMobile(options?.customerMobile);
+
+    const customerFilters: Array<Record<string, unknown>> = [];
+    if (normalizedCustomerId) {
+      customerFilters.push({ customerId: normalizedCustomerId });
+    }
+    if (normalizedCustomerMobile) {
+      customerFilters.push({ customerMobile: normalizedCustomerMobile });
+    }
+
+    if (!customerFilters.length) {
+      return Promise.resolve(null);
+    }
+
+    return BookingModel.findOne({
+      vendorId,
+      eventDate: { $gte: start, $lte: end },
+      bookingStatus: { $ne: "cancelled" },
+      $or: customerFilters,
       ...(options?.excludeBookingId
         ? {
             _id: {

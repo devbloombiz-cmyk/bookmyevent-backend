@@ -275,6 +275,8 @@ export const bookingService = {
         packageId: String(normalizedPayload["packageId"] || ""),
         eventDate: new Date(String(normalizedPayload["eventDate"] || "")),
         venueOwnerId: lead?.venueOwnerId ? String(lead.venueOwnerId) : null,
+        customerId: String(normalizedPayload["customerId"] || ""),
+        customerMobile: String(normalizedPayload["customerMobile"] || ""),
       });
     }
 
@@ -406,12 +408,17 @@ export const bookingService = {
 
       const packageId = String(existing.packageId || "");
       const vendorId = String(existing.vendorId || "");
+      const leadId = String(existing.leadId || "");
+      const lead = leadId ? await leadRepository.findById(leadId) : null;
 
       await bookingPolicyService.assertBookingConflictFree({
         vendorId,
         packageId,
         eventDate,
+        venueOwnerId: lead?.venueOwnerId ? String(lead.venueOwnerId) : null,
         excludeBookingId: bookingId,
+        customerId: String(existing.customerId || ""),
+        customerMobile: String(existing.customerMobile || ""),
       });
     }
 

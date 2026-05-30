@@ -1,4 +1,5 @@
 import { bookingRepository } from "../repositories/booking.repository";
+import { availabilityRepository } from "../repositories/availability.repository";
 import { vendorRepository } from "../repositories/vendor.repository";
 import { ApiError } from "../utils/api-error";
 
@@ -10,6 +11,8 @@ type AssertBookingConflictOptions = {
   eventDate: Date;
   venueOwnerId?: string | null;
   excludeBookingId?: string;
+  customerId?: string | null;
+  customerMobile?: string | null;
 };
 
 const normalizeBookingAgainst = (value: unknown): BookingAgainst =>
@@ -48,6 +51,35 @@ export const bookingPolicyService = {
     });
 
     if (bookingAgainst === "vendor") {
+      const availabilitySlots = await availabilityRepository.findByVendorAndDateRange(
+        options.vendorId,
+        options.eventDate,
+      );
+      const isManuallyOpenedForDate = availabilitySlots.some(
+        (slot) => String(slot.status || "").toLowerCase() === "available",
+      );
+
+      if (isManuallyOpenedForDate) {
+        const sameCustomerConflict = await bookingRepository.findActiveByVendorCustomerAndDate(
+          options.vendorId,
+          options.eventDate,
+          {
+            customerId: options.customerId,
+            customerMobile: options.customerMobile,
+            excludeBookingId: options.excludeBookingId,
+          },
+        );
+
+        if (sameCustomerConflict) {
+          throw new ApiError(
+            409,
+            "This customer already has a booking with this vendor on this date. Please choose another date.",
+          );
+        }
+
+        return;
+      }
+
       const conflict = await bookingRepository.findActiveByVendorAndDate(
         options.vendorId,
         options.eventDate,

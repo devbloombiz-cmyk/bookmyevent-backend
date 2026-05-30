@@ -910,6 +910,8 @@ export const paymentRequestService = {
       packageId: String(mappedAdvance.packageId),
       eventDate: new Date(lead.eventDate),
       venueOwnerId: lead.venueOwnerId ? String(lead.venueOwnerId) : null,
+      customerId: lead.customerId ? String(lead.customerId) : "",
+      customerMobile,
     });
 
     const booking = await bookingRepository.create({

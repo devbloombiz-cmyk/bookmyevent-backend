@@ -374,6 +374,8 @@ export const leadService = {
       packageId: payload.packageId,
       eventDate: new Date(lead.eventDate),
       venueOwnerId: lead.venueOwnerId ? String(lead.venueOwnerId) : null,
+      customerId: lead.customerId ? String(lead.customerId) : "",
+      customerMobile,
     });
 
     const booking = await bookingRepository.create({

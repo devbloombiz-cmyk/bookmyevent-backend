@@ -10,6 +10,7 @@ const leadSchema = new Schema(
     customerName: { type: String, default: "", trim: true },
     customerMobile: { type: String, default: "", trim: true },
     customerEmail: { type: String, default: "", trim: true },
+    packageId: { type: Schema.Types.ObjectId, ref: "VendorPackage", default: null },
     venuePackageName: { type: String, default: "", trim: true },
     eventDate: { type: Date, required: true },
     eventSlot: { type: String, default: "Full Day", trim: true },
@@ -31,6 +32,7 @@ leadSchema.index({ customerId: 1 });
 leadSchema.index({ status: 1 });
 leadSchema.index({ source: 1 });
 leadSchema.index({ eventDate: 1 });
+leadSchema.index({ packageId: 1 });
 leadSchema.index({ referralVendorId: 1 });
 
 export const LeadModel = model("Lead", leadSchema);

@@ -5,6 +5,7 @@ import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
+  checkBookingAvailabilitySchema,
   listAvailabilityByDateSchema,
   listAvailabilitySchema,
   setAvailabilitySchema,
@@ -22,6 +23,11 @@ availabilityRouter.get(
   "/public",
   validateRequest(listAvailabilitySchema),
   availabilityController.listByVendorPublic,
+);
+availabilityRouter.get(
+  "/public/booking-check",
+  validateRequest(checkBookingAvailabilitySchema),
+  availabilityController.checkBookingAvailability,
 );
 availabilityRouter.get(
   "/public/by-date",

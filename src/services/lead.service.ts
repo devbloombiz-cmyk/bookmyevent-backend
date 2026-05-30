@@ -172,6 +172,23 @@ export const leadService = {
         ? null
         : payload.venueOwnerId;
 
+    const packageId = String(payload.packageId || "");
+    const eventDate = new Date(String(payload.eventDate || ""));
+    const customerMobile =
+      normalizeMobile(String(payload.customerMobile || "")) ||
+      normalizeMobile(extractFromMessage(String(payload.message || ""), "Mobile"));
+
+    if (packageId) {
+      await bookingPolicyService.assertBookingConflictFree({
+        vendorId,
+        packageId,
+        eventDate,
+        venueOwnerId: venueOwnerId ? String(venueOwnerId) : null,
+        customerId: customerId || "",
+        customerMobile,
+      });
+    }
+
     const referralCode = normalizeReferralCode(payload.referralCode);
     let referralVendorId: string | null = null;
 
@@ -193,6 +210,7 @@ export const leadService = {
       vendorId,
       venueOwnerId: venueOwnerId || null,
       customerId: customerId || null,
+      customerMobile: String(payload.customerMobile || customerMobile || ""),
       referralCode,
       referralVendorId,
     });
@@ -210,16 +228,16 @@ export const leadService = {
       });
     }
 
-    const customerMobile =
+    const notificationMobile =
       normalizeMobile(String(lead.customerMobile || "")) ||
       normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
-    if (customerMobile) {
+    if (notificationMobile) {
       setImmediate(() => {
-        void trySendLeadReceivedWhatsapp({ mobile: customerMobile }).catch((error) => {
+        void trySendLeadReceivedWhatsapp({ mobile: notificationMobile }).catch((error) => {
           logger.warn(
             {
               leadId: String(lead._id),
-              mobile: customerMobile,
+              mobile: notificationMobile,
               error,
             },
             "Unable to send lead received WhatsApp notification",

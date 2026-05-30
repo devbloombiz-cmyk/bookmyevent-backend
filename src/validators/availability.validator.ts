@@ -27,3 +27,16 @@ export const listAvailabilityByDateSchema = z.object({
   }),
   params: z.object({}).default({}),
 });
+
+export const checkBookingAvailabilitySchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({
+    vendorId: z.string().min(24).max(24),
+    packageId: z.string().min(24).max(24),
+    eventDate: z.coerce.date(),
+    venueOwnerId: z.string().min(24).max(24).optional(),
+    customerId: z.string().min(24).max(24).optional(),
+    customerMobile: z.string().max(20).optional(),
+  }),
+  params: z.object({}).default({}),
+});

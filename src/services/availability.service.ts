@@ -3,12 +3,16 @@ import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
 import { resolveVendorIdForScopedUser } from "./vendor-identity.service";
+import { bookingPolicyService } from "./booking-policy.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
 };
 
-async function resolveTargetVendorIdForWrite(payloadVendorId: string | undefined, authUser: AuthUser) {
+async function resolveTargetVendorIdForWrite(
+  payloadVendorId: string | undefined,
+  authUser: AuthUser,
+) {
   if (
     authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
     authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
@@ -68,5 +72,38 @@ export const availabilityService = {
   },
   listAvailableVendorIdsByDate: async (date: Date) => {
     return availabilityRepository.listAvailableVendorIdsByDate(date);
+  },
+  checkBookingAvailability: async (payload: {
+    vendorId: string;
+    packageId: string;
+    eventDate: Date;
+    venueOwnerId?: string | null;
+    customerId?: string | null;
+    customerMobile?: string | null;
+  }) => {
+    try {
+      await bookingPolicyService.assertBookingConflictFree({
+        vendorId: payload.vendorId,
+        packageId: payload.packageId,
+        eventDate: payload.eventDate,
+        venueOwnerId: payload.venueOwnerId || null,
+        customerId: payload.customerId || "",
+        customerMobile: payload.customerMobile || "",
+      });
+
+      return {
+        available: true,
+        message: "Date available",
+      };
+    } catch (error) {
+      if (error instanceof ApiError && error.statusCode === 409) {
+        return {
+          available: false,
+          message: error.message,
+        };
+      }
+
+      throw error;
+    }
   },
 };

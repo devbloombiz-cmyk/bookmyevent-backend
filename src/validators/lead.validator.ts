@@ -10,6 +10,7 @@ export const createLeadSchema = z.object({
     customerName: z.string().max(120).optional().default(""),
     customerMobile: z.string().max(20).optional().default(""),
     customerEmail: z.string().email().optional().or(z.literal("")),
+    packageId: z.string().min(24).max(24).optional(),
     venuePackageName: z.string().max(120).optional().default(""),
     eventDate: z.coerce.date(),
     eventSlot: z.string().optional().default("Full Day"),

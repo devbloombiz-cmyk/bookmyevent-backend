@@ -22,6 +22,19 @@ export const availabilityController = {
     const slots = await availabilityService.listByVendor(vendorId);
     return sendSuccess(res, "Availability fetched", { slots });
   }),
+  checkBookingAvailability: asyncHandler(async (req, res) => {
+    const result = await availabilityService.checkBookingAvailability({
+      vendorId: String(req.query.vendorId || ""),
+      packageId: String(req.query.packageId || ""),
+      eventDate: new Date(String(req.query.eventDate || "")),
+      venueOwnerId: typeof req.query.venueOwnerId === "string" ? req.query.venueOwnerId : null,
+      customerId: typeof req.query.customerId === "string" ? req.query.customerId : null,
+      customerMobile:
+        typeof req.query.customerMobile === "string" ? req.query.customerMobile : null,
+    });
+
+    return sendSuccess(res, "Booking availability checked", { availability: result });
+  }),
   listAvailableVendorsByDate: asyncHandler(async (req, res) => {
     const eventDate = req.query.date;
     const date = typeof eventDate === "string" ? new Date(eventDate) : null;

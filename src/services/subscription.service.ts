@@ -1005,7 +1005,137 @@ export const subscriptionService = {
       };
     }
 
-    // Intentionally no subscription activation logic here yet.
+    const rootPayload =
+      payload.payload && typeof payload.payload === "object"
+        ? (payload.payload as Record<string, unknown>)
+        : {};
+
+    const paymentEntity =
+      rootPayload.payment && typeof rootPayload.payment === "object"
+        ? ((rootPayload.payment as Record<string, unknown>).entity as Record<string, unknown>) ||
+          null
+        : null;
+
+    const orderEntity =
+      rootPayload.order && typeof rootPayload.order === "object"
+        ? ((rootPayload.order as Record<string, unknown>).entity as Record<string, unknown>) || null
+        : null;
+
+    const providerOrderId = String(paymentEntity?.order_id || orderEntity?.id || "").trim();
+    const providerPaymentId = String(paymentEntity?.id || "").trim();
+
+    if (!providerOrderId) {
+      return {
+        processed: true,
+        duplicate: false,
+        eventId,
+        eventType,
+        reason: "Missing provider order id in payload",
+      };
+    }
+
+    const existing = await subscriptionRepository.findByProviderOrderId(providerOrderId);
+    if (!existing || String(existing.paymentProvider || "") !== "razorpay") {
+      return {
+        processed: true,
+        duplicate: false,
+        eventId,
+        eventType,
+        reason: "No matching Razorpay subscription order",
+      };
+    }
+
+    const metadata = {
+      ...(typeof existing.metadata === "object" && existing.metadata ? existing.metadata : {}),
+      webhookLastEvent: eventType,
+      webhookLastEventId: eventId,
+      webhookLastEventAt: new Date().toISOString(),
+    };
+
+    if (eventType === "payment.failed") {
+      const updated = await subscriptionRepository.updateSubscriptionById(String(existing._id), {
+        paymentStatus: "failed",
+        status: "pending_payment",
+        providerPaymentId: providerPaymentId || existing.providerPaymentId || "",
+        updatedBy: existing.updatedBy || null,
+        metadata,
+      });
+
+      return {
+        processed: true,
+        duplicate: false,
+        eventId,
+        eventType,
+        reconciledSubscriptionId: updated ? String(updated._id) : String(existing._id),
+        reconciliation: "marked_failed",
+      };
+    }
+
+    if (eventType === "payment.captured" || eventType === "order.paid") {
+      if (existing.paymentStatus === "confirmed" && existing.status === "active") {
+        return {
+          processed: true,
+          duplicate: false,
+          eventId,
+          eventType,
+          reconciledSubscriptionId: String(existing._id),
+          reconciliation: "already_active",
+        };
+      }
+
+      if (
+        providerPaymentId &&
+        existing.providerPaymentId &&
+        providerPaymentId !== existing.providerPaymentId
+      ) {
+        throw new ApiError(
+          409,
+          "Razorpay webhook payment id does not match the payment already linked to subscription",
+        );
+      }
+
+      const plan = await subscriptionRepository.getPlanByCode(existing.planCode);
+      if (!plan || !plan.isActive) {
+        throw new ApiError(400, "Plan is missing or inactive");
+      }
+
+      const now = new Date();
+      const currentEndsAt = normalizeDate(existing.endsAt);
+      const startsAt =
+        currentEndsAt && currentEndsAt.getTime() > now.getTime() ? currentEndsAt : now;
+      const endsAt = new Date(startsAt.getTime() + 365 * MS_PER_DAY);
+
+      const updated = await subscriptionRepository.updateSubscriptionById(String(existing._id), {
+        paymentStatus: "confirmed",
+        status: "active",
+        startsAt,
+        endsAt,
+        confirmedAt: now,
+        providerOrderId: providerOrderId || existing.providerOrderId || "",
+        providerPaymentId: providerPaymentId || existing.providerPaymentId || "",
+        amountInr: Number(existing.amountInr || plan.priceInr || 0),
+        updatedBy: existing.updatedBy || null,
+        metadata: {
+          ...metadata,
+          paymentConfirmedBy: "razorpay_webhook",
+          paymentConfirmedAt: now.toISOString(),
+        },
+      });
+
+      if (existing.actorType === "vendor") {
+        await ensureVendorReferralCode(String(existing.actorId));
+      }
+
+      return {
+        processed: true,
+        duplicate: false,
+        eventId,
+        eventType,
+        reconciledSubscriptionId: updated ? String(updated._id) : String(existing._id),
+        reconciliation: "activated",
+      };
+    }
+
     return {
       processed: true,
       duplicate: false,

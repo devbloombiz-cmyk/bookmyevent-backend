@@ -91,6 +91,26 @@ if (!parsedEnv.MONGODB_URI) {
 
 const mongodbUri = parsedEnv.MONGODB_URI;
 
+if (parsedEnv.NODE_ENV === "production" && parsedEnv.RAZORPAY_ENV === "live") {
+  const liveKeyId = (parsedEnv.RAZORPAY_KEY_ID_LIVE || parsedEnv.RAZORPAY_KEY_ID || "").trim();
+  const liveKeySecret = (
+    parsedEnv.RAZORPAY_KEY_SECRET_LIVE ||
+    parsedEnv.RAZORPAY_KEY_SECRET ||
+    ""
+  ).trim();
+  const liveWebhookSecret = (
+    parsedEnv.RAZORPAY_WEBHOOK_SECRET_LIVE ||
+    parsedEnv.RAZORPAY_WEBHOOK_SECRET ||
+    ""
+  ).trim();
+
+  if (!liveKeyId || !liveKeySecret || !liveWebhookSecret) {
+    throw new Error(
+      "RAZORPAY_ENV=live in production requires live key id, live key secret, and live webhook secret",
+    );
+  }
+}
+
 const defaultAccessExpiry = parsedEnv.NODE_ENV === "development" ? "7d" : "7d";
 const defaultRefreshExpiry = parsedEnv.NODE_ENV === "development" ? "90d" : "90d";
 const minimumSessionSeconds = 60 * 60 * 24 * 7;

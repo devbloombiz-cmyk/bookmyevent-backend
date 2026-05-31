@@ -22,7 +22,7 @@ const accountSubscriptionSchema = new Schema(
       enum: ["manual", "razorpay"],
       default: "manual",
     },
-    paymentReference: { type: String, default: "", trim: true, index: true },
+    paymentReference: { type: String, default: "", trim: true },
     providerOrderId: { type: String, default: "", trim: true },
     providerPaymentId: { type: String, default: "", trim: true },
     providerSignature: { type: String, default: "", trim: true },
@@ -38,5 +38,26 @@ const accountSubscriptionSchema = new Schema(
 );
 
 accountSubscriptionSchema.index({ actorType: 1, actorId: 1, createdAt: -1 });
+accountSubscriptionSchema.index(
+  { paymentReference: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { paymentReference: { $exists: true, $type: "string", $ne: "" } },
+  },
+);
+accountSubscriptionSchema.index(
+  { providerOrderId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { providerOrderId: { $exists: true, $type: "string", $ne: "" } },
+  },
+);
+accountSubscriptionSchema.index(
+  { providerPaymentId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { providerPaymentId: { $exists: true, $type: "string", $ne: "" } },
+  },
+);
 
 export const AccountSubscriptionModel = model("AccountSubscription", accountSubscriptionSchema);

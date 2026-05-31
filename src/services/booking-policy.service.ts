@@ -60,23 +60,6 @@ export const bookingPolicyService = {
       );
 
       if (isManuallyOpenedForDate) {
-        const sameCustomerConflict = await bookingRepository.findActiveByVendorCustomerAndDate(
-          options.vendorId,
-          options.eventDate,
-          {
-            customerId: options.customerId,
-            customerMobile: options.customerMobile,
-            excludeBookingId: options.excludeBookingId,
-          },
-        );
-
-        if (sameCustomerConflict) {
-          throw new ApiError(
-            409,
-            "This customer already has a booking with this vendor on this date. Please choose another date.",
-          );
-        }
-
         return;
       }
 

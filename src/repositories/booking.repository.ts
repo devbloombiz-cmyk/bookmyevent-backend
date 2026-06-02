@@ -75,6 +75,12 @@ export const bookingRepository = {
       },
     ]),
   findById: (bookingId: string) => BookingModel.findById(bookingId),
+  findByIds: (bookingIds: string[]) =>
+    BookingModel.find({
+      _id: {
+        $in: bookingIds,
+      },
+    }),
   findByLeadId: (leadId: string) => BookingModel.findOne({ leadId }),
   findActiveByVendorAndDate: (
     vendorId: string,

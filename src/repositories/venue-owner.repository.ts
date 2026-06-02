@@ -14,6 +14,10 @@ export const venueOwnerRepository = {
   create: (payload: Record<string, unknown>) => VenueOwnerModel.create(payload),
   findByUserId: (userId: string) => VenueOwnerModel.findOne({ userId }),
   findById: (id: string) => VenueOwnerModel.findById(id),
+  findByIds: (ids: string[]) =>
+    VenueOwnerModel.find({
+      _id: { $in: ids },
+    }),
   findByLinkedVendorId: (linkedVendorId: string) => VenueOwnerModel.findOne({ linkedVendorId }),
   findByEmailOrMobile: (email?: string | null, mobile?: string | null) => {
     const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";

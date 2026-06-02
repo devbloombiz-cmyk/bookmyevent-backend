@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { BOOKING_STATUSES, PAYMENT_STATUSES } from "../types/domain";
 
+const SETTLEMENT_STATUSES = ["PENDING", "SETTLED"] as const;
+
 export const bookingCreateSchema = z.object({
   body: z.object({
     customerId: z.string().min(24).max(24).optional(),
@@ -34,10 +36,13 @@ export const bookingUpdateSchema = z.object({
     .object({
       bookingStatus: z.enum(BOOKING_STATUSES).optional(),
       paymentStatus: z.enum(PAYMENT_STATUSES).optional(),
+      settlementStatus: z.enum(SETTLEMENT_STATUSES).optional(),
       advancePaid: z.number().nonnegative().optional(),
       paidAmount: z.number().nonnegative().optional(),
       dueAmount: z.number().nonnegative().optional(),
       amount: z.number().nonnegative().optional(),
+      settledAmount: z.number().nonnegative().optional(),
+      pendingSettlement: z.number().nonnegative().optional(),
       eventDate: z.coerce.date().optional(),
       eventSlot: z.string().optional(),
     })

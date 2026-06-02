@@ -3,14 +3,33 @@ import { PaymentRequestModel } from "../models/payment-request.model";
 export const paymentRequestRepository = {
   create: (payload: Record<string, unknown>) => PaymentRequestModel.create(payload),
   findById: (paymentRequestId: string) => PaymentRequestModel.findById(paymentRequestId),
+  findByIds: (paymentRequestIds: string[]) =>
+    PaymentRequestModel.find({
+      _id: {
+        $in: paymentRequestIds,
+      },
+    }),
   findByLeadId: (leadId: string) => PaymentRequestModel.find({ leadId }).sort({ createdAt: -1 }),
   findLatestAdvanceByLeadId: (leadId: string) =>
     PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE" }).sort({ createdAt: -1 }),
   findLatestPaidAdvanceByLeadId: (leadId: string) =>
-    PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE", status: "paid" }).sort({ createdAt: -1 }),
+    PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE", status: "paid" }).sort({
+      createdAt: -1,
+    }),
   findLatestPendingAdvanceByLeadId: (leadId: string) =>
-    PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE", status: "pending" }).sort({ createdAt: -1 }),
-  findByBookingId: (bookingId: string) => PaymentRequestModel.find({ bookingId }).sort({ createdAt: -1 }),
+    PaymentRequestModel.findOne({ leadId, paymentType: "ADVANCE", status: "pending" }).sort({
+      createdAt: -1,
+    }),
+  findByBookingId: (bookingId: string) =>
+    PaymentRequestModel.find({ bookingId }).sort({ createdAt: -1 }),
+  findPaidByVendor: (vendorId: string, limit = 500) =>
+    PaymentRequestModel.find({
+      vendorId,
+      status: "paid",
+      paidAmount: { $gt: 0 },
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(Math.max(1, Math.min(1000, Number(limit) || 500))),
   findLatestPendingByBookingId: (bookingId: string) =>
     PaymentRequestModel.findOne({ bookingId, status: "pending" }).sort({ createdAt: -1 }),
   findByRazorpayReferenceId: (referenceId: string) =>

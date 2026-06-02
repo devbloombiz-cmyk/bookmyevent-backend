@@ -378,6 +378,46 @@ export const bookingService = {
       }
     }
 
+    const effectiveEventDate =
+      payload.eventDate !== undefined
+        ? payload.eventDate
+        : (existing as { eventDate?: unknown }).eventDate;
+
+    if (payload.settlementStatus === "SETTLED" && isFutureEventDate(effectiveEventDate)) {
+      throw new ApiError(400, "Booking can be marked settled only on or after event date");
+    }
+
+    if (
+      payload.settlementStatus !== undefined ||
+      payload.settledAmount !== undefined ||
+      payload.pendingSettlement !== undefined
+    ) {
+      const vendorAmount = Math.max(0, Number(existing.vendorAmount || existing.amount || 0));
+
+      let nextSettledAmount =
+        payload.settledAmount !== undefined
+          ? Number(payload.settledAmount)
+          : Number(existing.settledAmount || 0);
+
+      if (!Number.isFinite(nextSettledAmount) || nextSettledAmount < 0) {
+        throw new ApiError(400, "settledAmount must be a valid positive number");
+      }
+
+      if (payload.settlementStatus === "SETTLED") {
+        nextSettledAmount = vendorAmount;
+      }
+
+      if (nextSettledAmount > vendorAmount) {
+        throw new ApiError(400, "settledAmount cannot exceed vendor amount");
+      }
+
+      const pendingSettlement = Math.max(0, vendorAmount - nextSettledAmount);
+
+      payload.settledAmount = nextSettledAmount;
+      payload.pendingSettlement = pendingSettlement;
+      payload.settlementStatus = pendingSettlement <= 0 ? "SETTLED" : "PENDING";
+    }
+
     if (
       payload.amount !== undefined ||
       payload.advancePaid !== undefined ||

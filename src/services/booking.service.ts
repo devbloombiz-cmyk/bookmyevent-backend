@@ -545,6 +545,19 @@ export const bookingService = {
       authUser,
     );
   },
+  markPaymentRequestReceived: async (
+    bookingId: string,
+    paymentRequestId: string,
+    payload: { amount: number; note?: string },
+    authUser: AuthUser,
+  ) => {
+    return paymentRequestService.markBookingPaymentRequestReceived(
+      bookingId,
+      paymentRequestId,
+      payload,
+      authUser,
+    );
+  },
   recordManualPayment: async (
     bookingId: string,
     payload: {

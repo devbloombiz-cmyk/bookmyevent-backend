@@ -293,30 +293,44 @@ export const paymentLedgerService = {
         .reduce((acc, row) => acc + Number(row.totalAmount || 0), 0),
     );
 
-    const history = razorpayRows.map((row) => {
+    const history = scopedRows.map((row) => {
       const paymentRequestId = String(row._id || "");
       const paidAmount = roundToMoney(Number(row.paidAmount || row.requestedAmount || 0));
-      const lockedAmount = roundToMoney(lockedAmountByPaymentRequestId.get(paymentRequestId) || 0);
-      const availableAmount = roundToMoney(Math.max(0, paidAmount - lockedAmount));
+      const withdrawalEligible = isRazorpayCapturedPaymentRequest(row);
+      const lockedAmount = roundToMoney(
+        withdrawalEligible ? lockedAmountByPaymentRequestId.get(paymentRequestId) || 0 : 0,
+      );
+      const availableAmount = roundToMoney(
+        withdrawalEligible ? Math.max(0, paidAmount - lockedAmount) : 0,
+      );
 
       return {
         ...row,
         paidAmount,
+        withdrawalEligible,
         lockedAmount,
         availableAmount,
       };
     });
 
+    const totalRazorpayReceived = roundToMoney(
+      razorpayRows.reduce(
+        (acc, row) => acc + Number(row.paidAmount || row.requestedAmount || 0),
+        0,
+      ),
+    );
     const totalReceived = roundToMoney(
       history.reduce((acc, row) => acc + Number(row.paidAmount || 0), 0),
     );
     const totalAvailable = roundToMoney(
-      Math.max(0, totalReceived - totalRequestedPending - totalTransferred),
+      Math.max(0, totalRazorpayReceived - totalRequestedPending - totalTransferred),
     );
 
     return {
       summary: {
         totalReceived,
+        totalRazorpayReceived,
+        totalNonRazorpayReceived: roundToMoney(Math.max(0, totalReceived - totalRazorpayReceived)),
         totalRequestedPending,
         totalTransferred,
         totalAvailable,

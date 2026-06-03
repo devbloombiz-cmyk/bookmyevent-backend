@@ -488,15 +488,14 @@ async function applyPaymentToBooking(bookingId: string, amountPaidDelta: number)
   }
 
   const totalAmount = Number(booking.amount || 0);
-  const nextPaid = Math.max(
-    0,
-    Number(booking.paidAmount || booking.advancePaid || 0) + amountPaidDelta,
-  );
+  const existingAdvance = Number(booking.advancePaid || 0);
+  const basePaid = Math.max(Number(booking.paidAmount || 0), existingAdvance);
+  const nextPaid = Math.max(0, basePaid + amountPaidDelta);
   const nextDue = Math.max(0, totalAmount - nextPaid);
 
   const updated = await bookingRepository.updateById(bookingId, {
     paidAmount: nextPaid,
-    advancePaid: Math.max(Number(booking.advancePaid || 0), nextPaid),
+    advancePaid: existingAdvance,
     dueAmount: nextDue,
     paymentStatus: nextDue <= 0 ? "paid" : "pending",
     settlementStatus: Number(booking.pendingSettlement || totalAmount) <= 0 ? "SETTLED" : "PENDING",
@@ -786,6 +785,97 @@ export const paymentRequestService = {
     });
 
     return updated;
+  },
+
+  markBookingPaymentRequestReceived: async (
+    bookingId: string,
+    paymentRequestId: string,
+    payload: { amount: number; note?: string },
+    authUser: AuthUser,
+  ) => {
+    const booking = await ensureBookingAccess(bookingId, authUser);
+    const paymentRequest = await paymentRequestRepository.findById(paymentRequestId);
+    if (!paymentRequest || String(paymentRequest.bookingId || "") !== String(booking._id)) {
+      throw new ApiError(404, "Payment request not found for this booking");
+    }
+
+    const amount = Number(payload.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new ApiError(400, "amount must be greater than zero");
+    }
+
+    const currentStatus = String(paymentRequest.status || "").toLowerCase();
+    if (currentStatus === "paid") {
+      const existingPaidAmount = Number(paymentRequest.paidAmount || 0);
+      if (Math.abs(existingPaidAmount - amount) < 0.01) {
+        return {
+          paymentRequest,
+          booking,
+        };
+      }
+
+      throw new ApiError(409, "Payment request is already marked as paid");
+    }
+
+    if (!["pending", "failed"].includes(currentStatus)) {
+      throw new ApiError(409, "Only pending or failed payment requests can be marked received");
+    }
+
+    const requestedAmount = Number(paymentRequest.requestedAmount || 0);
+    if (!requestedAmount || requestedAmount <= 0) {
+      throw new ApiError(400, "Invalid payment request amount for receive confirmation");
+    }
+
+    if (amount > requestedAmount) {
+      throw new ApiError(400, "Received amount cannot exceed requested amount");
+    }
+
+    const totalAmount = Number(booking.amount || 0);
+    const existingPaid = Number(booking.paidAmount || booking.advancePaid || 0);
+    const currentDue =
+      booking.dueAmount !== undefined
+        ? Number(booking.dueAmount)
+        : Math.max(0, totalAmount - existingPaid);
+
+    if (amount > currentDue) {
+      throw new ApiError(400, "Received amount cannot exceed current due amount");
+    }
+
+    const note = String(payload.note || "").trim();
+    const now = new Date();
+    const updatedRequest = await paymentRequestRepository.updateById(String(paymentRequest._id), {
+      status: "paid",
+      paidAmount: amount,
+      notes: note || String(paymentRequest.notes || ""),
+      metadata: {
+        ...((paymentRequest.metadata as Record<string, unknown>) || {}),
+        receiveMode: "MANUAL_CONFIRMATION",
+        receiveConfirmedByUserId: authUser.id,
+        receiveConfirmedAt: now.toISOString(),
+        receiveNote: note,
+      },
+    });
+
+    const updatedBooking = await applyPaymentToBooking(String(booking._id), amount);
+
+    await activityTimelineService.addEvent({
+      entityType: "booking",
+      entityId: String(booking._id),
+      vendorId: String(booking.vendorId),
+      actorUserId: authUser.id,
+      event: "PAYMENT_MARKED_RECEIVED",
+      message: "Payment request manually marked as received",
+      metadata: {
+        paymentRequestId: String(paymentRequest._id),
+        amount,
+        note,
+      },
+    });
+
+    return {
+      paymentRequest: updatedRequest,
+      booking: updatedBooking,
+    };
   },
 
   recordManualAdvancePaymentForLead: async (

@@ -94,6 +94,22 @@ export const bookingController = {
     );
     return sendSuccess(res, "Balance payment link sent to customer", { paymentRequest });
   }),
+  markPaymentRequestReceived: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const bookingId = String(req.params.bookingId);
+    const paymentRequestId = String(req.params.paymentRequestId);
+    const result = await bookingService.markPaymentRequestReceived(
+      bookingId,
+      paymentRequestId,
+      req.body,
+      authUser,
+    );
+    return sendSuccess(res, "Payment marked received", result);
+  }),
   recordManualPayment: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {

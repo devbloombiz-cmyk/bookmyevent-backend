@@ -16,6 +16,7 @@ import { leadRepository } from "../repositories/lead.repository";
 import { userRepository } from "../repositories/user.repository";
 import { vendorRepository } from "../repositories/vendor.repository";
 import { bookingPolicyService } from "./booking-policy.service";
+import { paymentRequestRepository } from "../repositories/payment-request.repository";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -506,6 +507,30 @@ export const bookingService = {
     authUser: AuthUser,
   ) => {
     return paymentRequestService.createBalanceRequestForBooking(bookingId, payload, authUser);
+  },
+  listBookingPaymentRequests: async (bookingId: string, authUser: AuthUser) => {
+    const existing = await bookingRepository.findById(bookingId);
+    if (!existing) {
+      throw new ApiError(404, "Booking not found");
+    }
+
+    if (
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
+      const vendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
+        ? await resolveVendorIdForAuthUser(authUser)
+        : await resolveVendorIdForScopedUser(authUser);
+
+      if (String(existing.vendorId) !== vendorId) {
+        throw new ApiError(403, "You are not allowed to access this booking");
+      }
+
+      await assertScopedBookingAccess(existing.toObject() as Record<string, unknown>, authUser);
+    }
+
+    const paymentRequests = await paymentRequestRepository.findByBookingId(bookingId);
+    return paymentRequests.map((item) => item.toObject() as Record<string, unknown>);
   },
   sendBalancePaymentLinkToCustomer: async (
     bookingId: string,

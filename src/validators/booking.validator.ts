@@ -68,6 +68,14 @@ export const bookingBalanceRequestSchema = z.object({
   }),
 });
 
+export const bookingPaymentRequestsListSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
+  params: z.object({
+    bookingId: z.string().min(1),
+  }),
+});
+
 export const bookingBalanceSendSchema = z.object({
   body: z.object({
     notes: z.string().optional(),

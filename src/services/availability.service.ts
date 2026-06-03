@@ -54,6 +54,15 @@ export const availabilityService = {
     payload: { vendorId?: string; date: Date; slot: string; status: string },
     authUser: AuthUser,
   ) => {
+    const selectedDate = new Date(payload.date);
+    selectedDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selectedDate.getTime() < today.getTime()) {
+      throw new ApiError(400, "Past dates cannot be updated");
+    }
+
     const vendorId = await resolveTargetVendorIdForWrite(payload.vendorId, authUser);
     return availabilityRepository.upsertSlot({
       vendorId,

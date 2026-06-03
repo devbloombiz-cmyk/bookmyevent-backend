@@ -68,6 +68,16 @@ export const bookingController = {
     );
     return sendSuccess(res, "Balance payment request created", { paymentRequest }, 201);
   }),
+  listBookingPaymentRequests: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const bookingId = String(req.params.bookingId);
+    const paymentRequests = await bookingService.listBookingPaymentRequests(bookingId, authUser);
+    return sendSuccess(res, "Booking payment requests fetched", { paymentRequests });
+  }),
   sendBalancePaymentLink: asyncHandler(async (req, res) => {
     const authUser = req.authUser;
     if (!authUser) {

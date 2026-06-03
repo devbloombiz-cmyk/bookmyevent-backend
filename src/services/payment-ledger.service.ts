@@ -186,6 +186,77 @@ function buildAmountMap(rows: Array<{ _id: unknown; amount: number }>) {
   return amountById;
 }
 
+function hasNonEmptyString(value: unknown) {
+  return String(value || "").trim().length > 0;
+}
+
+function isRazorpayCapturedPaymentRequest(row: Record<string, unknown>) {
+  const status = String(row.status || "").toLowerCase();
+  const paidAmount = Number(row.paidAmount || row.requestedAmount || 0);
+
+  return (
+    status === "paid" &&
+    paidAmount > 0 &&
+    (hasNonEmptyString(row.razorpayPaymentId) || hasNonEmptyString(row.webhookEventId))
+  );
+}
+
+async function assertWithdrawalSelectionsAreEligible(
+  context: ScopedActorContext,
+  selections: Array<{ paymentRequestId: string; amount: number }>,
+  options?: { excludeWithdrawalRequestId?: string },
+) {
+  const paymentRequestIds = selections.map((item) => item.paymentRequestId);
+  const paymentRows = await paymentRequestRepository.findByIds(paymentRequestIds);
+  if (paymentRows.length !== paymentRequestIds.length) {
+    throw new ApiError(404, "One or more selected payment records were not found");
+  }
+
+  const rawPaymentRows = paymentRows.map((item) => item.toObject() as Record<string, unknown>);
+  const scopedRows = await filterPaymentRequestsByScope(rawPaymentRows, context);
+  if (scopedRows.length !== rawPaymentRows.length) {
+    throw new ApiError(
+      403,
+      "You are not allowed to withdraw against one or more selected payments",
+    );
+  }
+
+  const scopedById = new Map(scopedRows.map((row) => [String(row._id), row]));
+  const lockedRows =
+    await paymentWithdrawalRequestRepository.aggregateLockedAmountByPaymentRequestIds(
+      paymentRequestIds,
+      options,
+    );
+  const lockedByPaymentRequestId = buildAmountMap(lockedRows);
+
+  for (const selection of selections) {
+    const payment = scopedById.get(selection.paymentRequestId);
+    if (!payment) {
+      throw new ApiError(404, "Selected payment was not found for withdrawal");
+    }
+
+    if (!isRazorpayCapturedPaymentRequest(payment)) {
+      throw new ApiError(
+        400,
+        `Withdrawal is allowed only for Razorpay received payments (${selection.paymentRequestId})`,
+      );
+    }
+
+    const paidAmount = roundToMoney(Number(payment.paidAmount || payment.requestedAmount || 0));
+    const lockedAmount = roundToMoney(
+      lockedByPaymentRequestId.get(selection.paymentRequestId) || 0,
+    );
+    const availableAmount = roundToMoney(Math.max(0, paidAmount - lockedAmount));
+
+    if (selection.amount > availableAmount) {
+      throw new ApiError(
+        400,
+        `Requested withdrawal exceeds available amount for payment ${selection.paymentRequestId}`,
+      );
+    }
+  }
+}
+
 export const paymentLedgerService = {
   listMyPaymentHistory: async (authUser: AuthUser, filters: PaymentHistoryFilters) => {
     const context = await resolveScopedActorContext(authUser);
@@ -197,8 +268,9 @@ export const paymentLedgerService = {
     const paidRequests = await paymentRequestRepository.findPaidByVendor(context.vendorId, limit);
     const normalizedRows = paidRequests.map((item) => item.toObject() as Record<string, unknown>);
     const scopedRows = await filterPaymentRequestsByScope(normalizedRows, context);
+    const razorpayRows = scopedRows.filter((row) => isRazorpayCapturedPaymentRequest(row));
 
-    const paymentRequestIds = scopedRows.map((row) => String(row._id));
+    const paymentRequestIds = razorpayRows.map((row) => String(row._id));
     const lockedRows =
       await paymentWithdrawalRequestRepository.aggregateLockedAmountByPaymentRequestIds(
         paymentRequestIds,
@@ -221,7 +293,7 @@ export const paymentLedgerService = {
         .reduce((acc, row) => acc + Number(row.totalAmount || 0), 0),
     );
 
-    const history = scopedRows.map((row) => {
+    const history = razorpayRows.map((row) => {
       const paymentRequestId = String(row._id || "");
       const paidAmount = roundToMoney(Number(row.paidAmount || row.requestedAmount || 0));
       const lockedAmount = roundToMoney(lockedAmountByPaymentRequestId.get(paymentRequestId) || 0);
@@ -264,52 +336,7 @@ export const paymentLedgerService = {
     }
 
     const normalizedSelections = normalizeSelectionRows(payload.paymentSelections);
-    const paymentRequestIds = normalizedSelections.map((item) => item.paymentRequestId);
-    const paymentRows = await paymentRequestRepository.findByIds(paymentRequestIds);
-    if (paymentRows.length !== paymentRequestIds.length) {
-      throw new ApiError(404, "One or more selected payment records were not found");
-    }
-
-    const rawPaymentRows = paymentRows.map((item) => item.toObject() as Record<string, unknown>);
-    const scopedRows = await filterPaymentRequestsByScope(rawPaymentRows, context);
-    if (scopedRows.length !== rawPaymentRows.length) {
-      throw new ApiError(
-        403,
-        "You are not allowed to withdraw against one or more selected payments",
-      );
-    }
-
-    const scopedById = new Map(scopedRows.map((row) => [String(row._id), row]));
-
-    const lockedRows =
-      await paymentWithdrawalRequestRepository.aggregateLockedAmountByPaymentRequestIds(
-        paymentRequestIds,
-      );
-    const lockedByPaymentRequestId = buildAmountMap(lockedRows);
-
-    for (const selection of normalizedSelections) {
-      const payment = scopedById.get(selection.paymentRequestId);
-      if (!payment) {
-        throw new ApiError(404, "Selected payment was not found for withdrawal");
-      }
-
-      if (String(payment.status || "") !== "paid") {
-        throw new ApiError(400, "Withdrawal can be requested only against paid payments");
-      }
-
-      const paidAmount = roundToMoney(Number(payment.paidAmount || payment.requestedAmount || 0));
-      const lockedAmount = roundToMoney(
-        lockedByPaymentRequestId.get(selection.paymentRequestId) || 0,
-      );
-      const availableAmount = roundToMoney(Math.max(0, paidAmount - lockedAmount));
-
-      if (selection.amount > availableAmount) {
-        throw new ApiError(
-          400,
-          `Requested withdrawal exceeds available amount for payment ${selection.paymentRequestId}`,
-        );
-      }
-    }
+    await assertWithdrawalSelectionsAreEligible(context, normalizedSelections);
 
     const requestedAmount = roundToMoney(
       normalizedSelections.reduce((acc, item) => acc + Number(item.amount || 0), 0),
@@ -425,10 +452,32 @@ export const paymentLedgerService = {
     const note = String(payload.note || "").trim();
     const now = new Date();
 
+    const normalizedExistingSelections = normalizeSelectionRows(
+      Array.isArray(existing.paymentSelections)
+        ? existing.paymentSelections.map((item) => {
+            const row = item as { paymentRequestId?: unknown; amount?: unknown };
+            return {
+              paymentRequestId: String(row.paymentRequestId || "").trim(),
+              amount: Number(row.amount || 0),
+            };
+          })
+        : [],
+    );
+
+    const existingContext: ScopedActorContext = {
+      vendorId: String(existing.vendorId || ""),
+      venueOwnerId: existing.venueOwnerId ? String(existing.venueOwnerId) : null,
+      ownerType: String(existing.ownerType || "") === "venue_owner" ? "venue_owner" : "vendor",
+    };
+
     if (action === "approve") {
       if (String(existing.status) !== "PENDING") {
         throw new ApiError(409, "Only pending requests can be approved");
       }
+
+      await assertWithdrawalSelectionsAreEligible(existingContext, normalizedExistingSelections, {
+        excludeWithdrawalRequestId: withdrawalRequestId,
+      });
 
       const updated = await paymentWithdrawalRequestRepository.updateById(withdrawalRequestId, {
         status: "APPROVED",
@@ -486,6 +535,10 @@ export const paymentLedgerService = {
     if (String(existing.status) !== "APPROVED") {
       throw new ApiError(409, "Only approved requests can be marked transferred");
     }
+
+    await assertWithdrawalSelectionsAreEligible(existingContext, normalizedExistingSelections, {
+      excludeWithdrawalRequestId: withdrawalRequestId,
+    });
 
     const transferReference = String(payload.transferReference || "").trim();
     if (!transferReference) {

@@ -1,10 +1,22 @@
 import { z } from "zod";
 import { AVAILABILITY_STATUSES } from "../types/domain";
 
+function isTodayOrFuture(value: Date) {
+  const selectedDate = new Date(value);
+  selectedDate.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return selectedDate.getTime() >= today.getTime();
+}
+
 export const setAvailabilitySchema = z.object({
   body: z.object({
     vendorId: z.string().min(24).max(24).optional(),
-    date: z.coerce.date(),
+    date: z.coerce.date().refine(isTodayOrFuture, {
+      message: "Past dates cannot be updated",
+    }),
     slot: z.string().min(2),
     status: z.enum(AVAILABILITY_STATUSES),
   }),

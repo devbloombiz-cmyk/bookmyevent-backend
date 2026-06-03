@@ -8,6 +8,7 @@ import {
   bookingBalanceRequestSchema,
   bookingBalanceSendSchema,
   bookingCreateSchema,
+  bookingPaymentRequestsListSchema,
   bookingReferralAdminListSchema,
   bookingReferralVendorListSchema,
   bookingListSchema,
@@ -61,6 +62,13 @@ bookingRouter.post(
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingBalanceRequestSchema),
   bookingController.requestBalancePayment,
+);
+bookingRouter.get(
+  "/:bookingId/payment-requests",
+  requireAuth,
+  authorize([PermissionKeys.BookingReadOwnVendor, PermissionKeys.BookingReadAny]),
+  validateRequest(bookingPaymentRequestsListSchema),
+  bookingController.listBookingPaymentRequests,
 );
 bookingRouter.post(
   "/:bookingId/payment-requests/:paymentRequestId/send",

@@ -81,6 +81,12 @@ function normalizeSelectionRows(
 }
 
 async function resolveScopedActorContext(authUser: AuthUser) {
+  const hasAnyScopeRead = authUser.permissions.includes(PermissionKeys.BookingReadAny);
+
+  if (hasAnyScopeRead) {
+    return null;
+  }
+
   if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
     const [vendorId, venueOwnerId] = await Promise.all([
       resolveVendorIdForScopedUser(authUser),

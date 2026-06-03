@@ -631,6 +631,8 @@ export const paymentRequestService = {
 
     await leadRepository.updateById(leadId, {
       status: "CONTACTED",
+      packageId: payload.packageId,
+      venuePackageName: payload.packageName || lead.venuePackageName || "",
       quoteAmount: payload.finalAmount,
       paymentLink: paymentLink.shortUrl,
       paymentStatus: "pending",
@@ -933,6 +935,8 @@ export const paymentRequestService = {
     });
 
     await leadRepository.updateById(leadId, {
+      packageId: payload.packageId,
+      venuePackageName: payload.packageName || lead.venuePackageName || "",
       quoteAmount: payload.finalAmount,
       paymentStatus: payload.paidAmount >= payload.finalAmount ? "paid" : "pending",
       status: payload.markBooked ? "BOOKED" : "PAYMENT_DONE",
@@ -970,19 +974,30 @@ export const paymentRequestService = {
     }
 
     const latestPaidAdvance = await paymentRequestRepository.findLatestPaidAdvanceByLeadId(leadId);
-    const mappedAdvance =
-      latestPaidAdvance && latestPaidAdvance.packageId ? latestPaidAdvance : null;
 
-    if (!mappedAdvance) {
+    if (!latestPaidAdvance) {
       throw new ApiError(
         400,
-        "No paid advance found with package mapping. Record payment first before marking booked.",
+        "No paid advance found. Send quote payment link and wait for payment, or record manual advance before marking booked.",
+      );
+    }
+
+    const latestAdvance = await paymentRequestRepository.findLatestAdvanceByLeadId(leadId);
+    const resolvedPackageId =
+      latestPaidAdvance.packageId || lead.packageId || latestAdvance?.packageId || null;
+
+    if (!resolvedPackageId) {
+      throw new ApiError(
+        400,
+        "Paid advance found, but package is missing. Select package and resend quote or record manual advance before converting.",
       );
     }
 
     const isPaid = true;
-    const totalAmount = Number(mappedAdvance.finalAmount || lead.quoteAmount || 0);
-    const webhookOrManualPaidAmount = Number(mappedAdvance.paidAmount || 0);
+    const totalAmount = Number(
+      latestPaidAdvance.finalAmount || latestAdvance?.finalAmount || lead.quoteAmount || 0,
+    );
+    const webhookOrManualPaidAmount = Number(latestPaidAdvance.paidAmount || 0);
     const paidAmount = Math.max(0, webhookOrManualPaidAmount);
     const dueAmount = Math.max(0, totalAmount - paidAmount);
     const bookingPaymentStatus = isPaid && dueAmount <= 0 ? "paid" : "pending";
@@ -999,7 +1014,7 @@ export const paymentRequestService = {
 
     await bookingPolicyService.assertBookingConflictFree({
       vendorId: String(lead.vendorId),
-      packageId: String(mappedAdvance.packageId),
+      packageId: String(resolvedPackageId),
       eventDate: new Date(lead.eventDate),
       venueOwnerId: lead.venueOwnerId ? String(lead.venueOwnerId) : null,
       customerId: lead.customerId ? String(lead.customerId) : "",
@@ -1013,7 +1028,7 @@ export const paymentRequestService = {
       customerEmail,
       vendorId: lead.vendorId,
       leadId: lead._id,
-      packageId: mappedAdvance.packageId,
+      packageId: resolvedPackageId,
       eventDate: lead.eventDate,
       eventSlot: lead.eventSlot,
       amount: totalAmount,
@@ -1033,9 +1048,12 @@ export const paymentRequestService = {
     await leadRepository.updateById(leadId, {
       status: "BOOKED",
       paymentStatus: bookingPaymentStatus,
+      packageId: resolvedPackageId,
+      quoteAmount: totalAmount,
     });
 
-    await paymentRequestRepository.updateById(String(mappedAdvance._id), {
+    await paymentRequestRepository.updateById(String(latestPaidAdvance._id), {
+      packageId: resolvedPackageId,
       bookingId: (booking as { _id?: unknown })._id,
     });
 
@@ -1061,7 +1079,12 @@ export const paymentRequestService = {
         mobile,
         bookingId: String((booking as { _id?: unknown })._id || ""),
         customerName,
-        packageName: String(mappedAdvance.packageName || lead.venuePackageName || ""),
+        packageName: String(
+          latestPaidAdvance.packageName ||
+            latestAdvance?.packageName ||
+            lead.venuePackageName ||
+            "",
+        ),
         eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
       });
     }

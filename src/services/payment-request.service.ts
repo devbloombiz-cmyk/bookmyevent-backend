@@ -806,15 +806,11 @@ export const paymentRequestService = {
 
     const currentStatus = String(paymentRequest.status || "").toLowerCase();
     if (currentStatus === "paid") {
-      const existingPaidAmount = Number(paymentRequest.paidAmount || 0);
-      if (Math.abs(existingPaidAmount - amount) < 0.01) {
-        return {
-          paymentRequest,
-          booking,
-        };
-      }
-
-      throw new ApiError(409, "Payment request is already marked as paid");
+      const refreshedBooking = await bookingRepository.findById(String(booking._id));
+      return {
+        paymentRequest,
+        booking: refreshedBooking || booking,
+      };
     }
 
     if (!["pending", "failed"].includes(currentStatus)) {
@@ -836,16 +832,14 @@ export const paymentRequestService = {
       booking.dueAmount !== undefined
         ? Number(booking.dueAmount)
         : Math.max(0, totalAmount - existingPaid);
-
-    if (amount > currentDue) {
-      throw new ApiError(400, "Received amount cannot exceed current due amount");
-    }
+    const effectiveDue = Math.max(0, currentDue);
+    const appliedAmount = Math.min(amount, requestedAmount, effectiveDue);
 
     const note = String(payload.note || "").trim();
     const now = new Date();
     const updatedRequest = await paymentRequestRepository.updateById(String(paymentRequest._id), {
       status: "paid",
-      paidAmount: amount,
+      paidAmount: appliedAmount,
       notes: note || String(paymentRequest.notes || ""),
       metadata: {
         ...((paymentRequest.metadata as Record<string, unknown>) || {}),
@@ -853,10 +847,15 @@ export const paymentRequestService = {
         receiveConfirmedByUserId: authUser.id,
         receiveConfirmedAt: now.toISOString(),
         receiveNote: note,
+        receiveRequestedAmount: amount,
+        receiveAppliedAmount: appliedAmount,
       },
     });
 
-    const updatedBooking = await applyPaymentToBooking(String(booking._id), amount);
+    const updatedBooking =
+      appliedAmount > 0
+        ? await applyPaymentToBooking(String(booking._id), appliedAmount)
+        : await bookingRepository.findById(String(booking._id));
 
     await activityTimelineService.addEvent({
       entityType: "booking",
@@ -867,7 +866,8 @@ export const paymentRequestService = {
       message: "Payment request manually marked as received",
       metadata: {
         paymentRequestId: String(paymentRequest._id),
-        amount,
+        requestedAmount: amount,
+        appliedAmount,
         note,
       },
     });
@@ -906,6 +906,13 @@ export const paymentRequestService = {
 
     if (payload.paidAmount > payload.finalAmount) {
       throw new ApiError(400, "paidAmount cannot exceed finalAmount");
+    }
+
+    const latestPendingAdvance =
+      await paymentRequestRepository.findLatestPendingAdvanceByLeadId(leadId);
+    const configuredAdvanceAmount = Number(latestPendingAdvance?.requestedAmount || 0);
+    if (configuredAdvanceAmount > 0 && payload.paidAmount > configuredAdvanceAmount) {
+      throw new ApiError(400, "paidAmount cannot exceed configured advance amount");
     }
 
     const paymentRequest = await paymentRequestRepository.create({
@@ -963,10 +970,8 @@ export const paymentRequestService = {
     }
 
     const latestPaidAdvance = await paymentRequestRepository.findLatestPaidAdvanceByLeadId(leadId);
-    const latestAdvance = await paymentRequestRepository.findLatestAdvanceByLeadId(leadId);
     const mappedAdvance =
-      (latestPaidAdvance && latestPaidAdvance.packageId ? latestPaidAdvance : null) ||
-      (latestAdvance && latestAdvance.packageId ? latestAdvance : null);
+      latestPaidAdvance && latestPaidAdvance.packageId ? latestPaidAdvance : null;
 
     if (!mappedAdvance) {
       throw new ApiError(
@@ -975,13 +980,10 @@ export const paymentRequestService = {
       );
     }
 
-    const isPaid = String(mappedAdvance.status || "").toLowerCase() === "paid";
+    const isPaid = true;
     const totalAmount = Number(mappedAdvance.finalAmount || lead.quoteAmount || 0);
-    const requestedAdvanceAmount = Number(mappedAdvance.requestedAmount || 0);
     const webhookOrManualPaidAmount = Number(mappedAdvance.paidAmount || 0);
-    const paidAmount = isPaid
-      ? Math.max(0, webhookOrManualPaidAmount)
-      : Math.max(0, requestedAdvanceAmount);
+    const paidAmount = Math.max(0, webhookOrManualPaidAmount);
     const dueAmount = Math.max(0, totalAmount - paidAmount);
     const bookingPaymentStatus = isPaid && dueAmount <= 0 ? "paid" : "pending";
     const customerMobile =
@@ -1024,11 +1026,17 @@ export const paymentRequestService = {
       settledAmount: 0,
       pendingSettlement: totalAmount,
       settlementStatus: "PENDING",
+      referralCode: String(lead.referralCode || ""),
+      referralVendorId: lead.referralVendorId ?? null,
     });
 
     await leadRepository.updateById(leadId, {
       status: "BOOKED",
       paymentStatus: bookingPaymentStatus,
+    });
+
+    await paymentRequestRepository.updateById(String(mappedAdvance._id), {
+      bookingId: (booking as { _id?: unknown })._id,
     });
 
     await activityTimelineService.addEvent({

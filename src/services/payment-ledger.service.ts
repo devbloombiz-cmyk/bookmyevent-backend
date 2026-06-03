@@ -190,6 +190,26 @@ function hasNonEmptyString(value: unknown) {
   return String(value || "").trim().length > 0;
 }
 
+const NON_WITHDRAWABLE_PAYMENT_SOURCES = new Set([
+  "MANUAL_BOOKING_PAYMENT",
+  "MANUAL_ADVANCE_PAYMENT",
+]);
+
+function getPaymentSource(row: Record<string, unknown>) {
+  const metadata =
+    row.metadata && typeof row.metadata === "object"
+      ? (row.metadata as Record<string, unknown>)
+      : null;
+
+  return String(metadata?.source || "")
+    .trim()
+    .toUpperCase();
+}
+
+function isManualEntryPaymentSource(row: Record<string, unknown>) {
+  return NON_WITHDRAWABLE_PAYMENT_SOURCES.has(getPaymentSource(row));
+}
+
 function isRazorpayCapturedPaymentRequest(row: Record<string, unknown>) {
   const status = String(row.status || "").toLowerCase();
   const paidAmount = Number(row.paidAmount || row.requestedAmount || 0);
@@ -199,6 +219,39 @@ function isRazorpayCapturedPaymentRequest(row: Record<string, unknown>) {
     paidAmount > 0 &&
     (hasNonEmptyString(row.razorpayPaymentId) || hasNonEmptyString(row.webhookEventId))
   );
+}
+
+function isManualConfirmedPaymentLinkPaymentRequest(row: Record<string, unknown>) {
+  const status = String(row.status || "").toLowerCase();
+  const paidAmount = Number(row.paidAmount || row.requestedAmount || 0);
+  if (status !== "paid" || paidAmount <= 0) {
+    return false;
+  }
+
+  const metadata =
+    row.metadata && typeof row.metadata === "object"
+      ? (row.metadata as Record<string, unknown>)
+      : null;
+  const receiveMode = String(metadata?.receiveMode || "")
+    .trim()
+    .toUpperCase();
+  const isManualConfirmation =
+    receiveMode === "MANUAL_CONFIRMATION" || hasNonEmptyString(metadata?.receiveConfirmedAt);
+
+  const isPaymentLinkSource =
+    hasNonEmptyString(row.razorpayPaymentLinkId) ||
+    hasNonEmptyString(row.razorpayReferenceId) ||
+    hasNonEmptyString(row.paymentLinkUrl);
+
+  return isManualConfirmation && isPaymentLinkSource;
+}
+
+function isWithdrawalEligiblePaymentRequest(row: Record<string, unknown>) {
+  if (isManualEntryPaymentSource(row)) {
+    return false;
+  }
+
+  return isRazorpayCapturedPaymentRequest(row) || isManualConfirmedPaymentLinkPaymentRequest(row);
 }
 
 async function assertWithdrawalSelectionsAreEligible(
@@ -235,10 +288,10 @@ async function assertWithdrawalSelectionsAreEligible(
       throw new ApiError(404, "Selected payment was not found for withdrawal");
     }
 
-    if (!isRazorpayCapturedPaymentRequest(payment)) {
+    if (!isWithdrawalEligiblePaymentRequest(payment)) {
       throw new ApiError(
         400,
-        `Withdrawal is allowed only for Razorpay received payments (${selection.paymentRequestId})`,
+        `Withdrawal is allowed only for eligible payment-link receipts (${selection.paymentRequestId})`,
       );
     }
 
@@ -269,8 +322,11 @@ export const paymentLedgerService = {
     const normalizedRows = paidRequests.map((item) => item.toObject() as Record<string, unknown>);
     const scopedRows = await filterPaymentRequestsByScope(normalizedRows, context);
     const razorpayRows = scopedRows.filter((row) => isRazorpayCapturedPaymentRequest(row));
+    const withdrawalEligibleRows = scopedRows.filter((row) =>
+      isWithdrawalEligiblePaymentRequest(row),
+    );
 
-    const paymentRequestIds = razorpayRows.map((row) => String(row._id));
+    const paymentRequestIds = withdrawalEligibleRows.map((row) => String(row._id));
     const lockedRows =
       await paymentWithdrawalRequestRepository.aggregateLockedAmountByPaymentRequestIds(
         paymentRequestIds,
@@ -296,7 +352,7 @@ export const paymentLedgerService = {
     const history = scopedRows.map((row) => {
       const paymentRequestId = String(row._id || "");
       const paidAmount = roundToMoney(Number(row.paidAmount || row.requestedAmount || 0));
-      const withdrawalEligible = isRazorpayCapturedPaymentRequest(row);
+      const withdrawalEligible = isWithdrawalEligiblePaymentRequest(row);
       const lockedAmount = roundToMoney(
         withdrawalEligible ? lockedAmountByPaymentRequestId.get(paymentRequestId) || 0 : 0,
       );
@@ -319,17 +375,24 @@ export const paymentLedgerService = {
         0,
       ),
     );
+    const totalWithdrawalEligibleReceived = roundToMoney(
+      withdrawalEligibleRows.reduce(
+        (acc, row) => acc + Number(row.paidAmount || row.requestedAmount || 0),
+        0,
+      ),
+    );
     const totalReceived = roundToMoney(
       history.reduce((acc, row) => acc + Number(row.paidAmount || 0), 0),
     );
     const totalAvailable = roundToMoney(
-      Math.max(0, totalRazorpayReceived - totalRequestedPending - totalTransferred),
+      Math.max(0, totalWithdrawalEligibleReceived - totalRequestedPending - totalTransferred),
     );
 
     return {
       summary: {
         totalReceived,
         totalRazorpayReceived,
+        totalWithdrawalEligibleReceived,
         totalNonRazorpayReceived: roundToMoney(Math.max(0, totalReceived - totalRazorpayReceived)),
         totalRequestedPending,
         totalTransferred,

@@ -385,7 +385,7 @@ export const paymentLedgerService = {
       history.reduce((acc, row) => acc + Number(row.paidAmount || 0), 0),
     );
     const totalAvailable = roundToMoney(
-      Math.max(0, totalWithdrawalEligibleReceived - totalRequestedPending - totalTransferred),
+      history.reduce((acc, row) => acc + Number(row.availableAmount || 0), 0),
     );
 
     return {

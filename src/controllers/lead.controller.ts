@@ -1,4 +1,5 @@
 import { leadService } from "../services/lead.service";
+import { paymentRequestService } from "../services/payment-request.service";
 import { sendSuccess } from "../utils/api-response";
 import { asyncHandler } from "../utils/async-handler";
 
@@ -76,5 +77,19 @@ export const leadController = {
     const leadId = String(req.params.leadId);
     const result = await leadService.recordManualAdvancePaymentForLead(leadId, req.body, authUser);
     return sendSuccess(res, "Manual payment recorded", result, 201);
+  }),
+  markLeadAdvanceReceived: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      return sendSuccess(res, "Unauthorized", { paymentRequest: null }, 401);
+    }
+
+    const leadId = String(req.params.leadId);
+    const result = await paymentRequestService.markLeadAdvanceReceived(leadId, req.body, authUser);
+    return sendSuccess(
+      res,
+      result.alreadyConfirmed ? "Advance already confirmed" : "Advance marked as received",
+      result,
+    );
   }),
 };

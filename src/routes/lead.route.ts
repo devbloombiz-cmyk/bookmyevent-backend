@@ -9,6 +9,7 @@ import {
   createOfferForLeadSchema,
   createLeadSchema,
   listLeadSchema,
+  markLeadAdvanceReceivedSchema,
   recordManualAdvancePaymentSchema,
   sendOfferPaymentLinkSchema,
   updateLeadSchema,
@@ -59,6 +60,13 @@ leadRouter.post(
   authorize([PermissionKeys.LeadUpdateOwnVendor, PermissionKeys.LeadUpdateAny]),
   validateRequest(recordManualAdvancePaymentSchema),
   leadController.recordManualAdvancePayment,
+);
+leadRouter.post(
+  "/:leadId/mark-advance-received",
+  requireAuth,
+  authorize([PermissionKeys.LeadUpdateOwnVendor, PermissionKeys.LeadUpdateAny]),
+  validateRequest(markLeadAdvanceReceivedSchema),
+  leadController.markLeadAdvanceReceived,
 );
 
 export { leadRouter };

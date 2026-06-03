@@ -963,6 +963,81 @@ export const paymentRequestService = {
     return { paymentRequest, booking };
   },
 
+  markLeadAdvanceReceived: async (
+    leadId: string,
+    payload: { note?: string },
+    authUser: AuthUser,
+  ) => {
+    const lead = await ensureLeadAccess(leadId, authUser);
+
+    if (!String(lead.paymentLink || "").trim()) {
+      throw new ApiError(
+        400,
+        "No payment link has been generated for this lead. Use 'Record Advance' for manual/cash payments.",
+      );
+    }
+
+    if (lead.status === "BOOKED") {
+      throw new ApiError(400, "This lead is already booked.");
+    }
+
+    if (lead.paymentStatus === "paid" && lead.status === "PAYMENT_DONE") {
+      const paidAdvance = await paymentRequestRepository.findLatestPaidAdvanceByLeadId(leadId);
+      if (paidAdvance) {
+        return { paymentRequest: paidAdvance, alreadyConfirmed: true };
+      }
+    }
+
+    const pendingAdvance = await paymentRequestRepository.findLatestPendingAdvanceByLeadId(leadId);
+    if (!pendingAdvance) {
+      throw new ApiError(
+        404,
+        "No pending advance request found. The advance may have already been confirmed via Razorpay webhook — refresh and try converting to booking.",
+      );
+    }
+
+    const requestedAmount = Number(pendingAdvance.requestedAmount || 0);
+    if (requestedAmount <= 0) {
+      throw new ApiError(400, "Advance request amount is invalid. Cannot confirm receipt.");
+    }
+
+    const note = String(payload.note || "").trim();
+    const now = new Date();
+
+    const updatedRequest = await paymentRequestRepository.updateById(String(pendingAdvance._id), {
+      status: "paid",
+      paidAmount: requestedAmount,
+      metadata: {
+        ...((pendingAdvance.metadata as Record<string, unknown>) || {}),
+        receiveMode: "MANUAL_CONFIRMATION",
+        receiveConfirmedByUserId: authUser.id,
+        receiveConfirmedAt: now.toISOString(),
+        receiveNote: note,
+      },
+    });
+
+    await leadRepository.updateById(leadId, {
+      paymentStatus: "paid",
+      status: "PAYMENT_DONE",
+    });
+
+    await activityTimelineService.addEvent({
+      entityType: "lead",
+      entityId: String(lead._id),
+      vendorId: String(lead.vendorId),
+      actorUserId: authUser.id,
+      event: "PAYMENT_MARKED_RECEIVED",
+      message: "Advance payment manually confirmed (payment link screenshot received)",
+      metadata: {
+        paymentRequestId: String(pendingAdvance._id),
+        paidAmount: requestedAmount,
+        note,
+      },
+    });
+
+    return { paymentRequest: updatedRequest, alreadyConfirmed: false };
+  },
+
   finalizeLeadAsBooked: async (leadId: string, authUser: AuthUser) => {
     const lead = await ensureLeadAccess(leadId, authUser);
     const existingBooking = await bookingRepository.findByLeadId(leadId);

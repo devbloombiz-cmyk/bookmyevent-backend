@@ -115,3 +115,13 @@ export const recordManualAdvancePaymentSchema = z.object({
     leadId: z.string().min(1),
   }),
 });
+
+export const markLeadAdvanceReceivedSchema = z.object({
+  body: z.object({
+    note: z.string().max(200).optional(),
+  }),
+  query: z.object({}),
+  params: z.object({
+    leadId: z.string().min(1),
+  }),
+});

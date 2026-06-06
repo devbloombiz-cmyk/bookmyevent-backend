@@ -610,18 +610,43 @@ export const venueOwnerService = {
       normalizedPayload.isActive = true;
     }
 
-    const [linkedUser] = await Promise.all([
-      ensureVenueOwnerUserAccount(normalizedPayload),
-      syncLocationIfPresent(normalizedPayload),
-    ]);
-
-    if (linkedUser?._id) {
-      normalizedPayload.userId = linkedUser._id;
-    }
+    await syncLocationIfPresent(normalizedPayload);
 
     const venueOwner = await venueOwnerRepository.create(normalizedPayload);
-    await syncVenueOwnerUserStatus(venueOwner.toObject(), normalizedPayload);
-    return venueOwnerRepository.findById(String(venueOwner._id));
+    const linkedUser = await (async () => {
+      try {
+        return await ensureVenueOwnerUserAccount(normalizedPayload);
+      } catch (error) {
+        try {
+          await venueOwnerRepository.deleteById(String(venueOwner._id));
+        } catch (rollbackError) {
+          logger.error(
+            {
+              venueOwnerId: String(venueOwner._id),
+              rollbackError,
+            },
+            "Failed to rollback venue owner record after user-link failure",
+          );
+        }
+        throw error;
+      }
+    })();
+
+    let persistedVenueOwner = venueOwner;
+    if (linkedUser?._id) {
+      const updatedVenueOwner = await venueOwnerRepository.updateById(String(venueOwner._id), {
+        userId: linkedUser._id,
+      });
+      if (!updatedVenueOwner) {
+        await venueOwnerRepository.deleteById(String(venueOwner._id));
+        throw new ApiError(500, "Unable to link venue owner account. Please try again.");
+      }
+      normalizedPayload.userId = linkedUser._id;
+      persistedVenueOwner = updatedVenueOwner;
+    }
+
+    await syncVenueOwnerUserStatus(persistedVenueOwner.toObject(), normalizedPayload);
+    return venueOwnerRepository.findById(String(persistedVenueOwner._id));
   },
   listVenueOwners: async (filters: Record<string, unknown>) => {
     const venueOwners = await venueOwnerRepository.findAll(filters);
@@ -708,15 +733,14 @@ export const venueOwnerService = {
       excludeVenueOwnerId: venueOwnerId,
     });
 
-    const [linkedUser] = await Promise.all([
-      ensureVenueOwnerUserAccount({
-        email: normalizedPayload.email ?? existingVenueOwner.email,
-        mobile: normalizedPayload.mobile ?? existingVenueOwner.mobile,
-        ownerName: normalizedPayload.ownerName ?? existingVenueOwner.ownerName,
-        businessName: normalizedPayload.businessName ?? existingVenueOwner.businessName,
-      }),
-      syncLocationIfPresent(normalizedPayload),
-    ]);
+    const linkedUser = await ensureVenueOwnerUserAccount({
+      email: normalizedPayload.email ?? existingVenueOwner.email,
+      mobile: normalizedPayload.mobile ?? existingVenueOwner.mobile,
+      ownerName: normalizedPayload.ownerName ?? existingVenueOwner.ownerName,
+      businessName: normalizedPayload.businessName ?? existingVenueOwner.businessName,
+    });
+
+    await syncLocationIfPresent(normalizedPayload);
 
     if (linkedUser?._id) {
       normalizedPayload.userId = linkedUser._id;

@@ -536,17 +536,42 @@ export const vendorService = {
       mobile: String(normalizedPayload.mobile || ""),
     });
 
-    const [linkedUser] = await Promise.all([
-      ensureVendorUserAccount(normalizedPayload),
-      syncLocationIfPresent(normalizedPayload),
-    ]);
-
-    if (linkedUser?._id) {
-      normalizedPayload.userId = linkedUser._id;
-    }
+    await syncLocationIfPresent(normalizedPayload);
 
     const vendor = await vendorRepository.create(normalizedPayload);
-    await syncVendorUserStatus(vendor.toObject(), normalizedPayload);
+    const linkedUser = await (async () => {
+      try {
+        return await ensureVendorUserAccount(normalizedPayload);
+      } catch (error) {
+        try {
+          await vendorRepository.deleteById(String(vendor._id));
+        } catch (rollbackError) {
+          logger.error(
+            {
+              vendorId: String(vendor._id),
+              rollbackError,
+            },
+            "Failed to rollback vendor record after user-link failure",
+          );
+        }
+        throw error;
+      }
+    })();
+
+    let persistedVendor = vendor;
+    if (linkedUser?._id) {
+      const updatedVendor = await vendorRepository.updateById(String(vendor._id), {
+        userId: linkedUser._id,
+      });
+      if (!updatedVendor) {
+        await vendorRepository.deleteById(String(vendor._id));
+        throw new ApiError(500, "Unable to link vendor account. Please try again.");
+      }
+      normalizedPayload.userId = linkedUser._id;
+      persistedVendor = updatedVendor;
+    }
+
+    await syncVendorUserStatus(persistedVendor.toObject(), normalizedPayload);
 
     const portfolioImages = Array.isArray(normalizedPayload.portfolioImages)
       ? normalizedPayload.portfolioImages.filter(
@@ -555,15 +580,15 @@ export const vendorService = {
       : [];
 
     await galleryService.syncVendorPortfolioGalleryItems({
-      vendorId: String(vendor._id),
-      vendorName: String(vendor.businessName ?? "Vendor"),
-      category: String(vendor.category ?? "general"),
-      subCategory: String(vendor.subCategory ?? ""),
-      city: String(vendor.city ?? ""),
+      vendorId: String(persistedVendor._id),
+      vendorName: String(persistedVendor.businessName ?? "Vendor"),
+      category: String(persistedVendor.category ?? "general"),
+      subCategory: String(persistedVendor.subCategory ?? ""),
+      city: String(persistedVendor.city ?? ""),
       mediaUrls: portfolioImages,
     });
 
-    return vendor;
+    return persistedVendor;
   },
   listVendors: async (filters: Record<string, unknown>) => {
     const vendors = await vendorRepository.findAll(filters);
@@ -811,10 +836,8 @@ export const vendorService = {
       excludeVendorId: vendorId,
     });
 
-    const [linkedUser] = await Promise.all([
-      ensureVendorUserAccount(normalizedPayload),
-      syncLocationIfPresent(normalizedPayload),
-    ]);
+    const linkedUser = await ensureVendorUserAccount(normalizedPayload);
+    await syncLocationIfPresent(normalizedPayload);
 
     if (linkedUser?._id) {
       normalizedPayload.userId = linkedUser._id;

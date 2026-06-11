@@ -17,6 +17,7 @@ import { VendorModel } from "../models/vendor.model";
 import { VenueOwnerModel } from "../models/venue-owner.model";
 import { BookingModel } from "../models/booking.model";
 import { LeadModel } from "../models/lead.model";
+import { AccountSubscriptionModel } from "../models/account-subscription.model";
 
 type SubAdminRole = Extract<UserRole, "vendor_admin" | "accounts_admin">;
 
@@ -255,6 +256,131 @@ export const userService = {
       pendingSettlementInr,
       activeLeads,
     };
+  },
+
+  getAdminRevenueDashboard: async () => {
+    const [revenueStats, subscriptionStats] = await Promise.all([
+      BookingModel.aggregate<{
+        _id: "vendor" | "venue_owner_shadow";
+        totalPaid: number;
+        totalPendingSettlement: number;
+        totalPlatformCommission: number;
+        totalVendorPayout: number;
+      }>([
+        {
+          $lookup: {
+            from: "vendors",
+            localField: "vendorId",
+            foreignField: "_id",
+            as: "vendorData",
+          },
+        },
+        {
+          $unwind: { path: "$vendorData", preserveNullAndEmptyArrays: true },
+        },
+        {
+          $group: {
+            _id: { $ifNull: ["$vendorData.profileType", "vendor"] },
+            totalPaid: {
+              $sum: {
+                $cond: [{ $eq: ["$paymentStatus", "paid"] }, { $ifNull: ["$paidAmount", 0] }, 0],
+              },
+            },
+            totalPendingSettlement: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$settlementStatus", "PENDING"] },
+                  { $ifNull: ["$pendingSettlement", 0] },
+                  0,
+                ],
+              },
+            },
+            totalPlatformCommission: {
+              $sum: {
+                $cond: [
+                  { $eq: ["$paymentStatus", "paid"] },
+                  {
+                    $subtract: [{ $ifNull: ["$paidAmount", 0] }, { $ifNull: ["$vendorAmount", 0] }],
+                  },
+                  0,
+                ],
+              },
+            },
+            totalVendorPayout: {
+              $sum: {
+                $cond: [{ $eq: ["$paymentStatus", "paid"] }, { $ifNull: ["$vendorAmount", 0] }, 0],
+              },
+            },
+          },
+        },
+      ]),
+      AccountSubscriptionModel.aggregate<{
+        _id: "vendor" | "venue_owner";
+        totalSubscriptionRevenue: number;
+      }>([
+        {
+          $match: {
+            paymentStatus: "confirmed",
+          },
+        },
+        {
+          $group: {
+            _id: "$actorType",
+            totalSubscriptionRevenue: { $sum: { $ifNull: ["$amountInr", 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const dashboard = {
+      totalBookingRevenue: 0,
+      totalSubscriptionRevenue: 0,
+      totalPlatformCommission: 0,
+      totalVendorPayout: 0,
+      vendors: {
+        revenue: 0,
+        subscriptionRevenue: 0,
+        commission: 0,
+        payout: 0,
+        pendingSettlement: 0,
+      },
+      venueOwners: {
+        revenue: 0,
+        subscriptionRevenue: 0,
+        commission: 0,
+        payout: 0,
+        pendingSettlement: 0,
+      },
+    };
+
+    for (const stat of revenueStats) {
+      if (stat._id === "venue_owner_shadow") {
+        dashboard.venueOwners.revenue += stat.totalPaid;
+        dashboard.venueOwners.commission += stat.totalPlatformCommission;
+        dashboard.venueOwners.payout += stat.totalVendorPayout;
+        dashboard.venueOwners.pendingSettlement += stat.totalPendingSettlement;
+      } else {
+        dashboard.vendors.revenue += stat.totalPaid;
+        dashboard.vendors.commission += stat.totalPlatformCommission;
+        dashboard.vendors.payout += stat.totalVendorPayout;
+        dashboard.vendors.pendingSettlement += stat.totalPendingSettlement;
+      }
+
+      dashboard.totalBookingRevenue += stat.totalPaid;
+      dashboard.totalPlatformCommission += Math.max(0, stat.totalPlatformCommission);
+      dashboard.totalVendorPayout += stat.totalVendorPayout;
+    }
+
+    for (const stat of subscriptionStats) {
+      if (stat._id === "venue_owner") {
+        dashboard.venueOwners.subscriptionRevenue += stat.totalSubscriptionRevenue;
+      } else {
+        dashboard.vendors.subscriptionRevenue += stat.totalSubscriptionRevenue;
+      }
+      dashboard.totalSubscriptionRevenue += stat.totalSubscriptionRevenue;
+    }
+
+    return dashboard;
   },
 
   createSubAdmin: async (payload: {

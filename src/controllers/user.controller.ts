@@ -19,6 +19,10 @@ export const userController = {
     const overview = await userService.getAdminDashboardOverview();
     return sendSuccess(res, "Admin dashboard overview fetched", { overview });
   }),
+  getAdminRevenueDashboard: asyncHandler(async (_req, res) => {
+    const dashboard = await userService.getAdminRevenueDashboard();
+    return sendSuccess(res, "Admin revenue dashboard fetched", { dashboard });
+  }),
   createSubAdmin: asyncHandler(async (req, res) => {
     const user = await userService.createSubAdmin(req.body);
     return sendSuccess(res, "System user created", { user }, 201);

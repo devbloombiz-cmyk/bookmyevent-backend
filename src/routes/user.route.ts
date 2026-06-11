@@ -6,6 +6,7 @@ import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   adminDashboardOverviewSchema,
+  adminRevenueDashboardSchema,
   createSubAdminSchema,
   getMyProfileSchema,
   listSystemUsersSchema,
@@ -33,6 +34,14 @@ userRouter.get(
   authorize(PermissionKeys.WorkspaceAdminAccess),
   validateRequest(adminDashboardOverviewSchema),
   userController.getAdminDashboardOverview,
+);
+
+userRouter.get(
+  "/admin-revenue-dashboard",
+  requireAuth,
+  authorize(PermissionKeys.WorkspaceAdminAccess),
+  validateRequest(adminRevenueDashboardSchema),
+  userController.getAdminRevenueDashboard,
 );
 
 userRouter.get(

@@ -96,7 +96,7 @@ export const venueOwnerRepository = {
     const limit =
       typeof filters.limit === "number" ? Math.max(1, Math.min(200, filters.limit)) : 60;
 
-    return VenueOwnerModel.find(query).sort({ createdAt: -1 }).limit(limit);
+    return VenueOwnerModel.find(query).sort({ createdAt: 1 }).limit(limit);
   },
   updateById: (id: string, payload: Record<string, unknown>) =>
     VenueOwnerModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),

@@ -133,7 +133,7 @@ export const vendorRepository = {
     const limit =
       typeof filters.limit === "number" ? Math.max(1, Math.min(1000, filters.limit)) : 50;
 
-    return VendorModel.find(query).sort({ createdAt: -1 }).limit(limit);
+    return VendorModel.find(query).sort({ createdAt: 1 }).limit(limit);
   },
   findById: (id: string) => VendorModel.findById(id),
   findByReferredByVendorId: (vendorId: string, limit = 200) =>
@@ -141,14 +141,14 @@ export const vendorRepository = {
       referredByVendorId: vendorId,
       profileType: { $ne: "venue_owner_shadow" },
     })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 })
       .limit(Math.max(1, Math.min(1000, limit))),
   findReferralAttributedVendors: (limit = 500) =>
     VendorModel.find({
       referredByVendorId: { $ne: null },
       profileType: { $ne: "venue_owner_shadow" },
     })
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: 1 })
       .limit(Math.max(1, Math.min(2000, limit))),
   updateById: (id: string, payload: Record<string, unknown>) =>
     VendorModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),

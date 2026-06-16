@@ -5,12 +5,37 @@ import type { Express } from "express";
 import { getS3Client, getS3Config } from "../config/s3";
 import { ApiError } from "./api-error";
 
-const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
-const allowedExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const allowedMimeTypes = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/bmp",
+  "image/tiff",
+  "image/heic",
+  "image/heif",
+]);
+const allowedExtensions = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".gif",
+  ".bmp",
+  ".tiff",
+  ".tif",
+  ".heic",
+  ".heif",
+]);
 const mimeTypeToExtensions: Record<string, string[]> = {
   "image/jpeg": [".jpg", ".jpeg"],
   "image/png": [".png"],
   "image/webp": [".webp"],
+  "image/gif": [".gif"],
+  "image/bmp": [".bmp"],
+  "image/tiff": [".tiff", ".tif"],
+  "image/heic": [".heic"],
+  "image/heif": [".heif"],
 };
 
 function hasMatchingImageMagicBytes(buffer: Buffer, mimeType: string): boolean {
@@ -32,6 +57,29 @@ function hasMatchingImageMagicBytes(buffer: Buffer, mimeType: string): boolean {
     }
 
     return buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
+  }
+
+  if (mimeType === "image/gif") {
+    return (
+      buffer.length >= 6 &&
+      (buffer.toString("ascii", 0, 6) === "GIF87a" || buffer.toString("ascii", 0, 6) === "GIF89a")
+    );
+  }
+
+  if (mimeType === "image/bmp") {
+    return buffer.length >= 2 && buffer.toString("ascii", 0, 2) === "BM";
+  }
+
+  if (mimeType === "image/tiff") {
+    return (
+      buffer.length >= 4 &&
+      ((buffer[0] === 0x49 && buffer[1] === 0x49 && buffer[2] === 0x2a && buffer[3] === 0x00) ||
+        (buffer[0] === 0x4d && buffer[1] === 0x4d && buffer[2] === 0x00 && buffer[3] === 0x2a))
+    );
+  }
+
+  if (mimeType === "image/heic" || mimeType === "image/heif") {
+    return buffer.length >= 12 && buffer.toString("ascii", 4, 8) === "ftyp";
   }
 
   return false;
@@ -112,7 +160,7 @@ export async function uploadToS3(
   const extension = path.extname(file.originalname || "").toLowerCase();
 
   if (!isAllowedImageMimeType(file.mimetype) || !isAllowedImageExtension(extension)) {
-    throw new ApiError(400, "Only jpeg, png, and webp images are allowed");
+    throw new ApiError(400, "Only image files (jpeg, png, webp, gif, bmp, tiff, heic) are allowed");
   }
 
   if (!isMimeTypeExtensionCombinationValid(file.mimetype, extension)) {

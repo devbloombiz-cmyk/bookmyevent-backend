@@ -18,7 +18,9 @@ export const imageUpload = multer({
     const extension = path.extname(file.originalname || "").toLowerCase();
 
     if (!isAllowedImageMimeType(file.mimetype) || !isAllowedImageExtension(extension)) {
-      cb(new ApiError(400, "Only jpeg, png, and webp images are supported"));
+      cb(
+        new ApiError(400, "Only image files (jpeg, png, webp, gif, bmp, tiff, heic) are supported"),
+      );
       return;
     }
 

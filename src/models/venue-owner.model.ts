@@ -130,19 +130,6 @@ const venueOwnerSchema = new Schema(
     addressLine: { type: String, default: "", trim: true },
     venueType: {
       type: String,
-      enum: [
-        "Auditorium & Convention Centres",
-        "Banquet Halls",
-        "Outdoor Venues",
-        "Hotels & Resorts",
-        "Conference / Meeting Halls",
-        "AC hall",
-        "AC_HALL",
-        "NON_AC_HALL",
-        "OUTDOOR",
-        "RESORT",
-        "HOTEL",
-      ],
       required: true,
     },
     venueTypes: {

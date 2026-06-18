@@ -1,14 +1,5 @@
 import { z } from "zod";
 
-const legacyVenueTypeEnum = z.enum([
-  "Auditorium & Convention Centres",
-  "Banquet Halls",
-  "Outdoor Venues",
-  "Hotels & Resorts",
-  "Conference / Meeting Halls",
-  "AC hall",
-]);
-
 const canonicalVenueTypeEnum = z.enum(["AC_HALL", "NON_AC_HALL", "OUTDOOR", "RESORT", "HOTEL"]);
 const canonicalPriceTypeEnum = z.enum(["PER_DAY", "PER_EVENT", "PER_PLATE"]);
 const legacyPriceTypeEnum = z.enum(["per_day", "per_event", "per_plate"]);
@@ -222,7 +213,7 @@ export const createVenueOwnerSchema = z.object({
       city: z.string().min(2),
       locationDisplayName: z.string().optional().default(""),
       addressLine: z.string().optional().default(""),
-      venueType: z.union([legacyVenueTypeEnum, canonicalVenueTypeEnum]).optional(),
+      venueType: z.string().min(2).optional(),
       venueTypes: z.array(canonicalVenueTypeEnum).optional().default([]),
       guestCapacity: z
         .object({
@@ -294,7 +285,7 @@ export const updateVenueOwnerSchema = z.object({
       city: z.string().min(2).optional(),
       locationDisplayName: z.string().optional(),
       addressLine: z.string().optional(),
-      venueType: z.union([legacyVenueTypeEnum, canonicalVenueTypeEnum]).optional(),
+      venueType: z.string().min(2).optional(),
       venueTypes: z.array(canonicalVenueTypeEnum).optional(),
       guestCapacity: z
         .object({

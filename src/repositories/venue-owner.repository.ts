@@ -94,7 +94,7 @@ export const venueOwnerRepository = {
     }
 
     const limit =
-      typeof filters.limit === "number" ? Math.max(1, Math.min(200, filters.limit)) : 60;
+      typeof filters.limit === "number" ? Math.max(1, Math.min(1000, filters.limit)) : 60;
 
     return VenueOwnerModel.find(query).sort({ createdAt: 1 }).limit(limit);
   },

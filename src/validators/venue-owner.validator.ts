@@ -362,7 +362,7 @@ export const listVenueOwnerSchema = z.object({
       .enum(["true", "false"])
       .optional()
       .transform((value) => (value ? value === "true" : undefined)),
-    limit: z.coerce.number().int().min(1).max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(1000).optional(),
   }),
   params: z.object({}).default({}),
 });

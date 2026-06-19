@@ -39,7 +39,7 @@ export const vendorRepository = {
   },
   findAll: (filters: Record<string, unknown> = {}) => {
     const query: Record<string, unknown> = {};
-    const includeInactive = filters.includeInactive === true;
+    const includeInactive = filters.includeInactive === true || filters.includeInactive === "true";
     query.profileType = { $ne: "venue_owner_shadow" };
 
     if (!includeInactive) {

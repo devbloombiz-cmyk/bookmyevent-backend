@@ -909,6 +909,11 @@ export const vendorService = {
     if (!vendor) {
       throw new ApiError(404, "Vendor not found");
     }
+
+    if (vendor.userId) {
+      await userRepository.deleteById(String(vendor.userId));
+    }
+
     return vendor;
   },
   listMyReferredVendors: async (authUser: Pick<AuthenticatedUser, "id">, limit = 200) => {

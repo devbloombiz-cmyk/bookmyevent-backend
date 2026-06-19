@@ -70,9 +70,13 @@ export const userRepository = {
         $set: {
           ...update,
           email: typeof update.email === "string" ? update.email.trim().toLowerCase() : undefined,
-          mobile: typeof update.mobile === "string" && update.mobile.trim() ? update.mobile.trim() : undefined,
+          mobile:
+            typeof update.mobile === "string" && update.mobile.trim()
+              ? update.mobile.trim()
+              : undefined,
         },
       },
       { upsert: true, returnDocument: "after" },
     ),
+  deleteById: (id: string) => UserModel.findByIdAndDelete(id),
 };

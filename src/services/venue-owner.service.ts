@@ -926,6 +926,10 @@ export const venueOwnerService = {
       throw new ApiError(404, "Venue owner not found");
     }
 
+    if (venueOwner.userId) {
+      await userRepository.deleteById(String(venueOwner.userId));
+    }
+
     return venueOwner;
   },
 };

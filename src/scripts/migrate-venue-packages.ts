@@ -3,7 +3,7 @@ import { config } from "dotenv";
 import { resolve } from "path";
 import { VenueOwnerModel } from "../models/venue-owner.model";
 
-config({ path: resolve(__dirname, "../../../.env") });
+config({ path: resolve(__dirname, "../../.env") });
 
 async function migrate() {
   try {

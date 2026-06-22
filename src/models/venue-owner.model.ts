@@ -108,7 +108,7 @@ const venuePackageSchema = new Schema(
     customMenuAvailable: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },
-  { _id: false },
+  { _id: true },
 );
 
 const venueOwnerSchema = new Schema(

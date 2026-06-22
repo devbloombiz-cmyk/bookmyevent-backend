@@ -134,6 +134,7 @@ const timeValueSchema = z
 
 const venuePackageSchema = z
   .object({
+    _id: z.string().optional(),
     packageName: z.string().min(1),
     basePrice: z.number().min(0).optional().default(0),
     price: z.number().min(0),

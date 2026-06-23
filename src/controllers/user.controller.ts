@@ -11,6 +11,10 @@ export const userController = {
     const profile = await userService.updateMyProfile(req.authUser!.id, req.body);
     return sendSuccess(res, "Profile updated", { profile });
   }),
+  deleteMyProfile: asyncHandler(async (req, res) => {
+    await userService.deleteMyProfile(req.authUser!.id, req.authUser!.role);
+    return sendSuccess(res, "Account deleted successfully", null);
+  }),
   listSystemUsers: asyncHandler(async (_req, res) => {
     const users = await userService.listSystemUsers();
     return sendSuccess(res, "System users fetched", { users });

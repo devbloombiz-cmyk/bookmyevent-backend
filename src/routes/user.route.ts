@@ -27,6 +27,7 @@ userRouter.patch(
   validateRequest(updateMyProfileSchema),
   userController.updateMyProfile,
 );
+userRouter.delete("/me", requireAuth, userController.deleteMyProfile);
 
 userRouter.get(
   "/admin-dashboard-overview",

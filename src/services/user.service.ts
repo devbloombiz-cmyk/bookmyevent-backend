@@ -18,6 +18,7 @@ import { VenueOwnerModel } from "../models/venue-owner.model";
 import { BookingModel } from "../models/booking.model";
 import { LeadModel } from "../models/lead.model";
 import { AccountSubscriptionModel } from "../models/account-subscription.model";
+import { RefreshTokenModel } from "../models/refresh-token.model";
 
 type SubAdminRole = Extract<UserRole, "vendor_admin" | "accounts_admin">;
 
@@ -107,6 +108,26 @@ export const userService = {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  },
+
+  deleteMyProfile: async (userId: string, role: string) => {
+    if (role !== "customer") {
+      throw new ApiError(403, "Only customer accounts can be deleted");
+    }
+
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    // Delete custom role bindings for the user
+    await pbacRepository.replaceUserRoles(userId, []);
+
+    // Delete active refresh tokens
+    await RefreshTokenModel.deleteMany({ userId });
+
+    // Hard delete the user account
+    await userRepository.deleteById(userId);
   },
 
   updateMyProfile: async (

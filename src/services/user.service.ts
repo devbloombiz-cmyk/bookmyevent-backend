@@ -209,6 +209,19 @@ export const userService = {
     }));
   },
 
+  listCustomers: async () => {
+    const customers = await userRepository.findByRole("customer");
+    return customers.map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+    }));
+  },
+
   getAdminDashboardOverview: async () => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);

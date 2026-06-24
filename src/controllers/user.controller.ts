@@ -19,6 +19,10 @@ export const userController = {
     const users = await userService.listSystemUsers();
     return sendSuccess(res, "System users fetched", { users });
   }),
+  listCustomers: asyncHandler(async (_req, res) => {
+    const users = await userService.listCustomers();
+    return sendSuccess(res, "Customers fetched", { users });
+  }),
   getAdminDashboardOverview: asyncHandler(async (_req, res) => {
     const overview = await userService.getAdminDashboardOverview();
     return sendSuccess(res, "Admin dashboard overview fetched", { overview });

@@ -53,6 +53,14 @@ userRouter.get(
   userController.listSystemUsers,
 );
 
+userRouter.get(
+  "/customers",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemRead),
+  validateRequest(listSystemUsersSchema),
+  userController.listCustomers,
+);
+
 userRouter.post(
   "/system-users",
   requireAuth,

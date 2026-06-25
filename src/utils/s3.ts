@@ -1,9 +1,10 @@
 import path from "path";
 import crypto from "crypto";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import type { Express } from "express";
 import { getS3Client, getS3Config } from "../config/s3";
 import { ApiError } from "./api-error";
+import { logger } from "../config/logger";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
@@ -209,4 +210,46 @@ export async function uploadToS3(
   } catch {
     throw new ApiError(500, "Failed to upload file to S3");
   }
+}
+
+export function extractS3KeyFromUrl(url: string): string | null {
+  if (!url) return null;
+  try {
+    const config = getS3Config();
+    const prefix = `https://${config.bucketName}.s3.${config.region}.amazonaws.com/`;
+    if (url.startsWith(prefix)) {
+      return url.substring(prefix.length);
+    }
+    const parsed = new URL(url);
+    if (parsed.hostname.endsWith(".amazonaws.com")) {
+      return decodeURIComponent(parsed.pathname.substring(1));
+    }
+  } catch {
+    // Ignore invalid URLs
+  }
+  return null;
+}
+
+export async function deleteFromS3(url: string): Promise<boolean> {
+  const key = extractS3KeyFromUrl(url);
+  if (!key) return false;
+
+  try {
+    const config = getS3Config();
+    const command = new DeleteObjectCommand({
+      Bucket: config.bucketName,
+      Key: key,
+    });
+    await getS3Client().send(command);
+    return true;
+  } catch (error) {
+    logger.warn({ url, key, error }, "Failed to delete file from S3");
+    return false;
+  }
+}
+
+export async function deleteManyFromS3(urls: string[]): Promise<void> {
+  const s3Urls = urls.filter(Boolean);
+  if (!s3Urls.length) return;
+  await Promise.allSettled(s3Urls.map((url) => deleteFromS3(url)));
 }

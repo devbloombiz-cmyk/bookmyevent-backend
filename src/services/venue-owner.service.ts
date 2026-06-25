@@ -10,6 +10,102 @@ import { subscriptionService } from "./subscription.service";
 import { subscriptionRepository } from "../repositories/subscription.repository";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
 import { logger } from "../config/logger";
+import { deleteManyFromS3 } from "../utils/s3";
+
+const cleanupVenueOwnerImagesOnUpdate = (
+  oldVenue: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) => {
+  const deletedUrls: string[] = [];
+
+  if ("profileImages" in payload && Array.isArray(payload.profileImages)) {
+    const oldImages = Array.isArray(oldVenue.profileImages) ? oldVenue.profileImages : [];
+    const newImagesSet = new Set(payload.profileImages.map((url) => String(url || "").trim()));
+
+    for (const url of oldImages) {
+      const trimmedUrl = String(url || "").trim();
+      if (trimmedUrl && !newImagesSet.has(trimmedUrl)) {
+        deletedUrls.push(trimmedUrl);
+      }
+    }
+  }
+
+  if ("venuePackages" in payload && Array.isArray(payload.venuePackages)) {
+    const newPackageImages = new Set<string>();
+    for (const pkg of payload.venuePackages) {
+      if (pkg && typeof pkg === "object") {
+        const cover = String((pkg as Record<string, unknown>).coverImage || "").trim();
+        if (cover) newPackageImages.add(cover);
+
+        const portfolio = (pkg as Record<string, unknown>).portfolioImages;
+        if (Array.isArray(portfolio)) {
+          for (const url of portfolio) {
+            const trimmed = String(url || "").trim();
+            if (trimmed) newPackageImages.add(trimmed);
+          }
+        }
+      }
+    }
+
+    const oldPackages = Array.isArray(oldVenue.venuePackages) ? oldVenue.venuePackages : [];
+    for (const pkg of oldPackages) {
+      if (pkg && typeof pkg === "object") {
+        const cover = String((pkg as Record<string, unknown>).coverImage || "").trim();
+        if (cover && !newPackageImages.has(cover)) {
+          deletedUrls.push(cover);
+        }
+
+        const portfolio = (pkg as Record<string, unknown>).portfolioImages;
+        if (Array.isArray(portfolio)) {
+          for (const url of portfolio) {
+            const trimmed = String(url || "").trim();
+            if (trimmed && !newPackageImages.has(trimmed)) {
+              deletedUrls.push(trimmed);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (deletedUrls.length > 0) {
+    deleteManyFromS3(deletedUrls).catch((err) => {
+      logger.error({ err, deletedUrls }, "Error in cleanupVenueOwnerImagesOnUpdate S3 deletion");
+    });
+  }
+};
+
+const cleanupVenueOwnerImagesOnDelete = (venueOwner: Record<string, unknown>) => {
+  const urlsToDelete: string[] = [];
+
+  if (Array.isArray(venueOwner.profileImages)) {
+    for (const url of venueOwner.profileImages) {
+      if (url) urlsToDelete.push(String(url));
+    }
+  }
+
+  if (Array.isArray(venueOwner.venuePackages)) {
+    for (const pkg of venueOwner.venuePackages) {
+      if (pkg && typeof pkg === "object") {
+        const cover = String((pkg as Record<string, unknown>).coverImage || "").trim();
+        if (cover) urlsToDelete.push(cover);
+
+        const portfolio = (pkg as Record<string, unknown>).portfolioImages;
+        if (Array.isArray(portfolio)) {
+          for (const url of portfolio) {
+            if (url) urlsToDelete.push(String(url));
+          }
+        }
+      }
+    }
+  }
+
+  if (urlsToDelete.length > 0) {
+    deleteManyFromS3(urlsToDelete).catch((err) => {
+      logger.error({ err, urlsToDelete }, "Error in cleanupVenueOwnerImagesOnDelete S3 deletion");
+    });
+  }
+};
 
 const defaultIncludedServiceItems = [
   "Hall Rental",
@@ -841,6 +937,11 @@ export const venueOwnerService = {
       throw new ApiError(404, "Venue owner not found");
     }
 
+    cleanupVenueOwnerImagesOnUpdate(
+      existingVenueOwner.toObject ? existingVenueOwner.toObject() : existingVenueOwner,
+      normalizedPayload,
+    );
+
     await syncVenueOwnerUserStatus(venueOwner.toObject(), normalizedPayload);
 
     const nextApprovalStatus = normalizeText(venueOwner.approvalStatus);
@@ -930,6 +1031,11 @@ export const venueOwnerService = {
       if (!updatedVenueOwner) {
         throw new ApiError(404, "Venue owner not found");
       }
+
+      cleanupVenueOwnerImagesOnUpdate(
+        venueOwnerByUserId.toObject ? venueOwnerByUserId.toObject() : venueOwnerByUserId,
+        normalizedPayload,
+      );
 
       return updatedVenueOwner;
     }
@@ -1028,6 +1134,11 @@ export const venueOwnerService = {
       throw new ApiError(404, "Venue owner not found");
     }
 
+    cleanupVenueOwnerImagesOnUpdate(
+      venueOwner.toObject ? venueOwner.toObject() : venueOwner,
+      normalizedPayload,
+    );
+
     return updatedVenueOwner;
   },
   deleteVenueOwner: async (venueOwnerId: string) => {
@@ -1035,6 +1146,8 @@ export const venueOwnerService = {
     if (!venueOwner) {
       throw new ApiError(404, "Venue owner not found");
     }
+
+    cleanupVenueOwnerImagesOnDelete(venueOwner.toObject ? venueOwner.toObject() : venueOwner);
 
     if (venueOwner.userId) {
       await userRepository.deleteById(String(venueOwner.userId));

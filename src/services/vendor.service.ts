@@ -11,8 +11,59 @@ import { subscriptionService } from "./subscription.service";
 import { subscriptionRepository } from "../repositories/subscription.repository";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
 import { logger } from "../config/logger";
+import { deleteManyFromS3 } from "../utils/s3";
 
 const normalizeText = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+const cleanupVendorImagesOnUpdate = (
+  oldVendor: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) => {
+  const deletedUrls: string[] = [];
+
+  if ("coverImage" in payload) {
+    const oldCover = String(oldVendor.coverImage || "").trim();
+    const newCover = String(payload.coverImage || "").trim();
+    if (oldCover && oldCover !== newCover) {
+      deletedUrls.push(oldCover);
+    }
+  }
+
+  if ("portfolioImages" in payload && Array.isArray(payload.portfolioImages)) {
+    const oldPortfolio = Array.isArray(oldVendor.portfolioImages) ? oldVendor.portfolioImages : [];
+    const newPortfolioSet = new Set(payload.portfolioImages.map((url) => String(url || "").trim()));
+
+    for (const url of oldPortfolio) {
+      const trimmedUrl = String(url || "").trim();
+      if (trimmedUrl && !newPortfolioSet.has(trimmedUrl)) {
+        deletedUrls.push(trimmedUrl);
+      }
+    }
+  }
+
+  if (deletedUrls.length > 0) {
+    deleteManyFromS3(deletedUrls).catch((err) => {
+      logger.error({ err, deletedUrls }, "Error in cleanupVendorImagesOnUpdate S3 deletion");
+    });
+  }
+};
+
+const cleanupVendorImagesOnDelete = (vendor: Record<string, unknown>) => {
+  const urlsToDelete: string[] = [];
+  if (vendor.coverImage) {
+    urlsToDelete.push(String(vendor.coverImage));
+  }
+  if (Array.isArray(vendor.portfolioImages)) {
+    for (const url of vendor.portfolioImages) {
+      if (url) urlsToDelete.push(String(url));
+    }
+  }
+  if (urlsToDelete.length > 0) {
+    deleteManyFromS3(urlsToDelete).catch((err) => {
+      logger.error({ err, urlsToDelete }, "Error in cleanupVendorImagesOnDelete S3 deletion");
+    });
+  }
+};
 const normalizeSubCategories = (value: unknown) => {
   if (!Array.isArray(value)) {
     return [] as string[];
@@ -787,6 +838,11 @@ export const vendorService = {
         throw new ApiError(404, "Vendor not found");
       }
 
+      cleanupVendorImagesOnUpdate(
+        vendorByUserId.toObject ? vendorByUserId.toObject() : vendorByUserId,
+        normalizedPayload,
+      );
+
       if (Array.isArray(normalizedPayload.portfolioImages)) {
         await galleryService.syncVendorPortfolioGalleryItems({
           vendorId: String(updatedVendor._id),
@@ -868,6 +924,8 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
+    cleanupVendorImagesOnUpdate(vendor.toObject ? vendor.toObject() : vendor, normalizedPayload);
+
     if (Array.isArray(normalizedPayload.portfolioImages)) {
       await galleryService.syncVendorPortfolioGalleryItems({
         vendorId: String(updatedVendor._id),
@@ -943,6 +1001,11 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
+    cleanupVendorImagesOnUpdate(
+      existingVendor.toObject ? existingVendor.toObject() : existingVendor,
+      normalizedPayload,
+    );
+
     if (
       Array.isArray(normalizedPayload.portfolioImages) &&
       normalizedPayload.portfolioImages.length > 0
@@ -982,6 +1045,8 @@ export const vendorService = {
     if (!vendor) {
       throw new ApiError(404, "Vendor not found");
     }
+
+    cleanupVendorImagesOnDelete(vendor.toObject ? vendor.toObject() : vendor);
 
     if (vendor.userId) {
       await userRepository.deleteById(String(vendor.userId));

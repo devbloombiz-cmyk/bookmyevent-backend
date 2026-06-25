@@ -1,5 +1,7 @@
 import { blogRepository } from "../repositories/blog.repository";
 import { ApiError } from "../utils/api-error";
+import { deleteFromS3 } from "../utils/s3";
+import { logger } from "../config/logger";
 
 function slugify(value: string) {
   return value
@@ -82,11 +84,16 @@ export const blogService = {
     return blog;
   },
   updateBlog: async (blogId: string, payload: Record<string, unknown>) => {
+    const existingBlog = await blogRepository.findById(blogId);
+    if (!existingBlog) {
+      throw new ApiError(404, "Blog not found");
+    }
+
     const normalized = normalizePayload(payload, { partial: true });
 
     if (normalized.slug) {
-      const existing = await blogRepository.findBySlug(String(normalized.slug), true);
-      if (existing && String(existing._id) !== blogId) {
+      const existingWithSlug = await blogRepository.findBySlug(String(normalized.slug), true);
+      if (existingWithSlug && String(existingWithSlug._id) !== blogId) {
         throw new ApiError(409, "Blog slug already exists");
       }
     }
@@ -96,6 +103,16 @@ export const blogService = {
       throw new ApiError(404, "Blog not found");
     }
 
+    if ("coverImage" in normalized) {
+      const oldCover = String(existingBlog.coverImage || "").trim();
+      const newCover = String(normalized.coverImage || "").trim();
+      if (oldCover && oldCover !== newCover) {
+        deleteFromS3(oldCover).catch((err) => {
+          logger.error({ err, oldCover }, "Error in updateBlog S3 cleanup");
+        });
+      }
+    }
+
     return blog;
   },
   deleteBlog: async (blogId: string) => {
@@ -103,6 +120,16 @@ export const blogService = {
     if (!blog) {
       throw new ApiError(404, "Blog not found");
     }
+
+    if (blog.coverImage) {
+      deleteFromS3(String(blog.coverImage)).catch((err) => {
+        logger.error(
+          { err, coverImage: blog.coverImage },
+          "Error deleting blog coverImage from S3",
+        );
+      });
+    }
+
     return blog;
   },
 };

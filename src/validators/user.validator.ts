@@ -68,3 +68,42 @@ export const createSubAdminSchema = z.object({
   query: z.object({}),
   params: z.object({}),
 });
+
+export const getUserDetailsSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+});
+
+export const deleteUserSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+});
+
+export const updateUserSchema = z.object({
+  body: z.object({
+    name: z.string().min(2).optional(),
+    email: z.string().email().optional().or(z.literal("")),
+    mobile: z.string().min(8).max(20).optional(),
+    isActive: z.boolean().optional(),
+    role: z
+      .enum(["super_admin", "vendor_admin", "accounts_admin", "vendor", "venue_owner", "customer"])
+      .optional(),
+    accessCollections: z
+      .array(z.string().trim().min(1))
+      .max(20)
+      .optional()
+      .refine((keys) => !keys || keys.every((key) => validAccessCollectionKeys.has(key)), {
+        message: "Invalid access collection key supplied",
+      }),
+  }),
+  query: z.object({}).default({}),
+  params: z.object({
+    id: z.string().min(1),
+  }),
+});

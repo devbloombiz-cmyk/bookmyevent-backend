@@ -379,7 +379,7 @@ const notifyVendorApprovalActivated = async (vendorRecord: Record<string, unknow
   }
 
   const businessName = normalizeText(vendorRecord.businessName) || "your vendor profile";
-  const message = `BookMyEvent update: ${businessName} is approved. You can now login at /login and continue onboarding.`;
+  const message = `BookMyEvent update: ${businessName} is approved. You can now login at www.bookmyevent.ae/login and continue onboarding.`;
 
   try {
     await ultramsgWhatsappService.sendMessage({

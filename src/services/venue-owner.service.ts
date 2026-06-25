@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { venueOwnerRepository } from "../repositories/venue-owner.repository";
 import { userRepository } from "../repositories/user.repository";
+import { vendorRepository } from "../repositories/vendor.repository";
 import { locationService } from "./location.service";
 import { ApiError } from "../utils/api-error";
 import type { UserRole } from "../types/domain";
@@ -470,6 +471,87 @@ const ensureVenueOwnerUserAccount = async (payload: Record<string, unknown>) => 
   });
 };
 
+const syncUserAccount = async (
+  userId: string | undefined | null,
+  normalizedPayload: Record<string, unknown>,
+  existingVenueOwner: Record<string, unknown>,
+) => {
+  const linkedUserId = userId ? String(userId) : "";
+  if (!linkedUserId) {
+    return;
+  }
+
+  const user = await userRepository.findById(linkedUserId);
+  if (!user) {
+    return;
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+
+  if ("ownerName" in normalizedPayload || "businessName" in normalizedPayload) {
+    const ownerName = normalizeText(normalizedPayload.ownerName ?? existingVenueOwner.ownerName);
+    const businessName = normalizeText(
+      normalizedPayload.businessName ?? existingVenueOwner.businessName,
+    );
+    updatePayload.name = ownerName || businessName || "Venue Owner";
+  }
+
+  if ("email" in normalizedPayload) {
+    const email = normalizeText(normalizedPayload.email).toLowerCase();
+    if (email && email !== user.email) {
+      const emailOwner = await userRepository.findByEmail(email);
+      if (emailOwner && emailOwner.id !== user.id) {
+        throw new ApiError(409, "Email already registered to another account");
+      }
+      updatePayload.email = email;
+    }
+  }
+
+  if ("mobile" in normalizedPayload) {
+    const mobile = normalizeText(normalizedPayload.mobile);
+    if (mobile && mobile !== user.mobile) {
+      const mobileOwner = await userRepository.findByMobile(mobile);
+      if (mobileOwner && mobileOwner.id !== user.id) {
+        throw new ApiError(409, "Mobile number already registered to another account");
+      }
+      updatePayload.mobile = mobile;
+    }
+  }
+
+  if (Object.keys(updatePayload).length > 0) {
+    await userRepository.updateById(user.id, updatePayload);
+  }
+};
+
+const syncShadowVendor = async (
+  linkedVendorId: string | undefined | null,
+  normalizedPayload: Record<string, unknown>,
+) => {
+  const vendorId = linkedVendorId ? String(linkedVendorId) : "";
+  if (!vendorId) {
+    return;
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+
+  if ("ownerName" in normalizedPayload) {
+    updatePayload.ownerName = normalizedPayload.ownerName;
+  }
+  if ("businessName" in normalizedPayload) {
+    updatePayload.businessName = normalizedPayload.businessName;
+  }
+  if ("email" in normalizedPayload) {
+    updatePayload.email = normalizedPayload.email;
+  }
+  if ("mobile" in normalizedPayload) {
+    updatePayload.mobile = normalizedPayload.mobile;
+  }
+
+  if (Object.keys(updatePayload).length > 0) {
+    await vendorRepository.updateById(vendorId, updatePayload);
+  }
+};
+
 const syncVenueOwnerUserStatus = async (
   venueOwnerRecord: Record<string, unknown>,
   payload: Record<string, unknown>,
@@ -733,18 +815,26 @@ export const venueOwnerService = {
       excludeVenueOwnerId: venueOwnerId,
     });
 
-    const linkedUser = await ensureVenueOwnerUserAccount({
-      email: normalizedPayload.email ?? existingVenueOwner.email,
-      mobile: normalizedPayload.mobile ?? existingVenueOwner.mobile,
-      ownerName: normalizedPayload.ownerName ?? existingVenueOwner.ownerName,
-      businessName: normalizedPayload.businessName ?? existingVenueOwner.businessName,
-    });
+    const linkedUserId = existingVenueOwner.userId;
+    if (linkedUserId) {
+      await syncUserAccount(String(linkedUserId), normalizedPayload, existingVenueOwner.toObject());
+    } else {
+      const linkedUser = await ensureVenueOwnerUserAccount({
+        email: normalizedPayload.email ?? existingVenueOwner.email,
+        mobile: normalizedPayload.mobile ?? existingVenueOwner.mobile,
+        ownerName: normalizedPayload.ownerName ?? existingVenueOwner.ownerName,
+        businessName: normalizedPayload.businessName ?? existingVenueOwner.businessName,
+      });
+      if (linkedUser?._id) {
+        normalizedPayload.userId = linkedUser._id;
+      }
+    }
+
+    if (existingVenueOwner.linkedVendorId) {
+      await syncShadowVendor(String(existingVenueOwner.linkedVendorId), normalizedPayload);
+    }
 
     await syncLocationIfPresent(normalizedPayload);
-
-    if (linkedUser?._id) {
-      normalizedPayload.userId = linkedUser._id;
-    }
 
     const venueOwner = await venueOwnerRepository.updateById(venueOwnerId, normalizedPayload);
     if (!venueOwner) {
@@ -822,6 +912,16 @@ export const venueOwnerService = {
       }
 
       await syncLocationIfPresent(normalizedPayload);
+
+      await syncUserAccount(
+        String(venueOwnerByUserId.userId || authUser.id),
+        normalizedPayload,
+        venueOwnerByUserId.toObject(),
+      );
+
+      if (venueOwnerByUserId.linkedVendorId) {
+        await syncShadowVendor(String(venueOwnerByUserId.linkedVendorId), normalizedPayload);
+      }
 
       const updatedVenueOwner = await venueOwnerRepository.updateById(
         String(venueOwnerByUserId._id),
@@ -909,6 +1009,16 @@ export const venueOwnerService = {
     }
 
     await syncLocationIfPresent(normalizedPayload);
+
+    await syncUserAccount(
+      String(venueOwner.userId || authUser.id),
+      normalizedPayload,
+      venueOwner.toObject(),
+    );
+
+    if (venueOwner.linkedVendorId) {
+      await syncShadowVendor(String(venueOwner.linkedVendorId), normalizedPayload);
+    }
 
     const updatedVenueOwner = await venueOwnerRepository.updateById(
       String(venueOwner._id),

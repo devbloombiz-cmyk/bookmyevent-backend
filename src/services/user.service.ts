@@ -172,6 +172,47 @@ export const userService = {
       throw new ApiError(500, "Unable to update profile");
     }
 
+    // Sync to vendor / venue owner collections
+    if (updatedUser.role === "vendor") {
+      await VendorModel.updateOne(
+        { userId: updatedUser.id },
+        {
+          $set: {
+            name: updatedUser.name,
+            email: updatedUser.email,
+            mobile: updatedUser.mobile,
+            isActive: updatedUser.isActive,
+          },
+        },
+      );
+    } else if (updatedUser.role === "venue_owner") {
+      await VenueOwnerModel.updateOne(
+        { userId: updatedUser.id },
+        {
+          $set: {
+            name: updatedUser.name,
+            email: updatedUser.email,
+            mobile: updatedUser.mobile,
+            isActive: updatedUser.isActive,
+          },
+        },
+      );
+      const venueOwner = await VenueOwnerModel.findOne({ userId: updatedUser.id });
+      if (venueOwner && venueOwner.linkedVendorId) {
+        await VendorModel.updateOne(
+          { _id: venueOwner.linkedVendorId },
+          {
+            $set: {
+              name: updatedUser.name,
+              email: updatedUser.email,
+              mobile: updatedUser.mobile,
+              isActive: updatedUser.isActive,
+            },
+          },
+        );
+      }
+    }
+
     return {
       id: updatedUser.id,
       name: updatedUser.name,

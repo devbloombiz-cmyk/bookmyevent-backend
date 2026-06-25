@@ -7,19 +7,19 @@ import { ApiError } from "../utils/api-error";
 import { verifyAccessToken } from "../utils/tokens";
 import { parseCookieHeader } from "../utils/cookie";
 
-function extractAccessToken(req: Request) {
+function extractAccessToken(req: Request): { token: string; fromCookie: boolean } {
   const cookies = parseCookieHeader(req.headers.cookie);
   const cookieToken = cookies[env.AUTH_ACCESS_COOKIE_NAME];
   if (cookieToken) {
-    return cookieToken;
+    return { token: cookieToken, fromCookie: true };
   }
 
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
-    return authHeader.split(" ")[1];
+    return { token: authHeader.split(" ")[1], fromCookie: false };
   }
 
-  return "";
+  return { token: "", fromCookie: false };
 }
 
 function assertCsrf(req: Request) {
@@ -38,13 +38,15 @@ function assertCsrf(req: Request) {
 }
 
 export const requireAuth = async (req: Request, _res: Response, next: NextFunction) => {
-  const token = extractAccessToken(req);
+  const { token, fromCookie } = extractAccessToken(req);
   if (!token) {
     return next(new ApiError(401, "Missing authorization token"));
   }
 
   try {
-    assertCsrf(req);
+    if (fromCookie) {
+      assertCsrf(req);
+    }
 
     const decoded = verifyAccessToken(token);
     const user = await userRepository.findById(decoded.sub);
@@ -82,13 +84,15 @@ export const requireAuth = async (req: Request, _res: Response, next: NextFuncti
 };
 
 export const attachAuthIfPresent = async (req: Request, _res: Response, next: NextFunction) => {
-  const token = extractAccessToken(req);
+  const { token, fromCookie } = extractAccessToken(req);
   if (!token) {
     return next();
   }
 
   try {
-    assertCsrf(req);
+    if (fromCookie) {
+      assertCsrf(req);
+    }
 
     const decoded = verifyAccessToken(token);
     const user = await userRepository.findById(decoded.sub);

@@ -11,6 +11,9 @@ import {
   getMyProfileSchema,
   listSystemUsersSchema,
   updateMyProfileSchema,
+  getUserDetailsSchema,
+  updateUserSchema,
+  deleteUserSchema,
 } from "../validators/user.validator";
 
 const userRouter = Router();
@@ -67,6 +70,30 @@ userRouter.post(
   authorize(PermissionKeys.UserSystemCreate),
   validateRequest(createSubAdminSchema),
   userController.createSubAdmin,
+);
+
+userRouter.get(
+  "/:id",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemRead),
+  validateRequest(getUserDetailsSchema),
+  userController.getUserDetails,
+);
+
+userRouter.patch(
+  "/:id",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemCreate),
+  validateRequest(updateUserSchema),
+  userController.updateUser,
+);
+
+userRouter.delete(
+  "/:id",
+  requireAuth,
+  authorize(PermissionKeys.UserSystemCreate),
+  validateRequest(deleteUserSchema),
+  userController.deleteUser,
 );
 
 export { userRouter };

@@ -513,4 +513,212 @@ export const userService = {
       permissions: accessProfile.permissions,
     };
   },
+
+  getUserDetails: async (userId: string) => {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    const accessProfile = await resolveAccessProfileForUser(user.id).catch(() => null);
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      role: user.role,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      roleKeys: accessProfile?.roleKeys ?? [],
+      permissions: accessProfile?.permissions ?? [],
+    };
+  },
+
+  updateUser: async (
+    userId: string,
+    payload: {
+      name?: string;
+      email?: string;
+      mobile?: string;
+      isActive?: boolean;
+      role?: UserRole;
+      accessCollections?: string[];
+    },
+  ) => {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    const updatePayload: {
+      name?: string;
+      email?: string;
+      mobile?: string;
+      isActive?: boolean;
+      role?: UserRole;
+    } = {};
+
+    if (payload.name) {
+      updatePayload.name = payload.name.trim();
+    }
+
+    if (payload.email !== undefined) {
+      const normalizedEmail = payload.email.trim().toLowerCase();
+      if (normalizedEmail) {
+        const emailOwner = await userRepository.findByEmail(normalizedEmail);
+        if (emailOwner && emailOwner.id !== user.id) {
+          throw new ApiError(409, "Email already registered");
+        }
+        updatePayload.email = normalizedEmail;
+      } else {
+        updatePayload.email = "";
+      }
+    }
+
+    if (payload.mobile) {
+      const normalizedMobile = payload.mobile.trim();
+      const mobileOwner = await userRepository.findByMobile(normalizedMobile);
+      if (mobileOwner && mobileOwner.id !== user.id) {
+        throw new ApiError(409, "Mobile number already registered");
+      }
+      updatePayload.mobile = normalizedMobile;
+    }
+
+    if (payload.isActive !== undefined) {
+      updatePayload.isActive = payload.isActive;
+    }
+
+    if (payload.role) {
+      updatePayload.role = payload.role;
+    }
+
+    const updatedUser = await userRepository.updateById(userId, updatePayload);
+    if (!updatedUser) {
+      throw new ApiError(500, "Unable to update user");
+    }
+
+    // Sync to vendor / venue owner collections
+    if (updatedUser.role === "vendor") {
+      await VendorModel.updateOne(
+        { userId: updatedUser.id },
+        {
+          $set: {
+            name: updatedUser.name,
+            email: updatedUser.email,
+            mobile: updatedUser.mobile,
+            isActive: updatedUser.isActive,
+          },
+        },
+      );
+    } else if (updatedUser.role === "venue_owner") {
+      await VenueOwnerModel.updateOne(
+        { userId: updatedUser.id },
+        {
+          $set: {
+            name: updatedUser.name,
+            email: updatedUser.email,
+            mobile: updatedUser.mobile,
+            isActive: updatedUser.isActive,
+          },
+        },
+      );
+      const venueOwner = await VenueOwnerModel.findOne({ userId: updatedUser.id });
+      if (venueOwner && venueOwner.linkedVendorId) {
+        await VendorModel.updateOne(
+          { _id: venueOwner.linkedVendorId },
+          {
+            $set: {
+              name: updatedUser.name,
+              email: updatedUser.email,
+              mobile: updatedUser.mobile,
+              isActive: updatedUser.isActive,
+            },
+          },
+        );
+      }
+    }
+
+    // If accessCollections are supplied (for staff roles)
+    if (
+      payload.accessCollections !== undefined &&
+      ["vendor_admin", "accounts_admin"].includes(updatedUser.role)
+    ) {
+      const requestedCollections = normalizeAccessCollections(payload.accessCollections);
+      const effectivePermissionKeys = resolvePermissionKeysFromCollections(requestedCollections);
+
+      const permissionSet = new Set<PermissionKey>(effectivePermissionKeys);
+      permissionSet.add(PermissionKeys.WorkspaceAdminAccess);
+      permissionSet.add(PermissionKeys.UserProfileRead);
+      permissionSet.add(PermissionKeys.UserProfileUpdate);
+
+      const resolvedPermissionKeys = Array.from(permissionSet);
+      await Promise.all(
+        resolvedPermissionKeys.map((key) =>
+          pbacRepository.upsertPermission(key, `System permission: ${key}`),
+        ),
+      );
+
+      const dynamicRole = await pbacRepository.upsertCustomRole(
+        `staff:${updatedUser.id}`,
+        `${updatedUser.name} Access Profile`,
+        "Custom access profile configured by super admin",
+      );
+
+      if (dynamicRole) {
+        const permissionDocs = await pbacRepository.listPermissionsByKeys(resolvedPermissionKeys);
+        const permissionIds = permissionDocs.map((permission) => String(permission._id));
+        await pbacRepository.replaceRolePermissions(String(dynamicRole._id), permissionIds);
+        await pbacRepository.replaceUserRoles(updatedUser.id, [String(dynamicRole._id)]);
+        await invalidatePermissionCache(updatedUser.id);
+      }
+    }
+
+    const accessProfile = await resolveAccessProfileForUser(updatedUser.id).catch(() => null);
+
+    return {
+      id: updatedUser.id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      mobile: updatedUser.mobile,
+      role: updatedUser.role,
+      isActive: updatedUser.isActive,
+      createdAt: updatedUser.createdAt,
+      roleKeys: accessProfile?.roleKeys ?? [],
+      permissions: accessProfile?.permissions ?? [],
+    };
+  },
+
+  deleteUser: async (userId: string) => {
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    // Delete custom role bindings for the user
+    await pbacRepository.replaceUserRoles(userId, []);
+
+    // Delete active refresh tokens
+    await RefreshTokenModel.deleteMany({ userId });
+
+    // If the user is a vendor, delete/deactivate vendor
+    if (user.role === "vendor") {
+      await VendorModel.deleteMany({ userId });
+    }
+
+    // If the user is a venue owner, delete venue owner & shadow vendor
+    if (user.role === "venue_owner") {
+      const venueOwner = await VenueOwnerModel.findOne({ userId });
+      if (venueOwner) {
+        if (venueOwner.linkedVendorId) {
+          await VendorModel.findByIdAndDelete(venueOwner.linkedVendorId);
+        }
+        await VenueOwnerModel.findByIdAndDelete(venueOwner._id);
+      }
+    }
+
+    // Hard delete the user account
+    await userRepository.deleteById(userId);
+  },
 };

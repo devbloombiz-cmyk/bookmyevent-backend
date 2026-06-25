@@ -35,4 +35,16 @@ export const userController = {
     const user = await userService.createSubAdmin(req.body);
     return sendSuccess(res, "System user created", { user }, 201);
   }),
+  getUserDetails: asyncHandler(async (req, res) => {
+    const user = await userService.getUserDetails(req.params.id as string);
+    return sendSuccess(res, "User details fetched", { user });
+  }),
+  updateUser: asyncHandler(async (req, res) => {
+    const user = await userService.updateUser(req.params.id as string, req.body);
+    return sendSuccess(res, "User updated successfully", { user });
+  }),
+  deleteUser: asyncHandler(async (req, res) => {
+    await userService.deleteUser(req.params.id as string);
+    return sendSuccess(res, "User deleted successfully", null);
+  }),
 };

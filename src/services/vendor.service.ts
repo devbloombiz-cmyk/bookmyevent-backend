@@ -223,6 +223,58 @@ const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
   });
 };
 
+const syncUserAccount = async (
+  userId: string | undefined | null,
+  normalizedPayload: Record<string, unknown>,
+  existingVendor: Record<string, unknown>,
+) => {
+  const linkedUserId = userId ? String(userId) : "";
+  if (!linkedUserId) {
+    return;
+  }
+
+  const user = await userRepository.findById(linkedUserId);
+  if (!user) {
+    return;
+  }
+
+  const updatePayload: Record<string, unknown> = {};
+
+  if ("ownerName" in normalizedPayload || "businessName" in normalizedPayload) {
+    const ownerName = normalizeText(normalizedPayload.ownerName ?? existingVendor.ownerName);
+    const businessName = normalizeText(
+      normalizedPayload.businessName ?? existingVendor.businessName,
+    );
+    updatePayload.name = ownerName || businessName || "Vendor";
+  }
+
+  if ("email" in normalizedPayload) {
+    const email = normalizeText(normalizedPayload.email).toLowerCase();
+    if (email && email !== user.email) {
+      const emailOwner = await userRepository.findByEmail(email);
+      if (emailOwner && emailOwner.id !== user.id) {
+        throw new ApiError(409, "Email already registered to another account");
+      }
+      updatePayload.email = email;
+    }
+  }
+
+  if ("mobile" in normalizedPayload) {
+    const mobile = normalizeText(normalizedPayload.mobile);
+    if (mobile && mobile !== user.mobile) {
+      const mobileOwner = await userRepository.findByMobile(mobile);
+      if (mobileOwner && mobileOwner.id !== user.id) {
+        throw new ApiError(409, "Mobile number already registered to another account");
+      }
+      updatePayload.mobile = mobile;
+    }
+  }
+
+  if (Object.keys(updatePayload).length > 0) {
+    await userRepository.updateById(user.id, updatePayload);
+  }
+};
+
 const withBackwardCompatibleSubCategories = (
   vendor: Record<string, unknown>,
 ): Record<string, unknown> & { subCategory: string; subCategories: string[] } => {
@@ -721,6 +773,12 @@ export const vendorService = {
 
       await syncLocationIfPresent(normalizedPayload);
 
+      await syncUserAccount(
+        String(vendorByUserId.userId || authUser.id),
+        normalizedPayload,
+        vendorByUserId.toObject(),
+      );
+
       const updatedVendor = await vendorRepository.updateById(
         String(vendorByUserId._id),
         normalizedPayload,
@@ -799,6 +857,12 @@ export const vendorService = {
 
     await syncLocationIfPresent(normalizedPayload);
 
+    await syncUserAccount(
+      String(vendor.userId || authUser.id),
+      normalizedPayload,
+      vendor.toObject(),
+    );
+
     const updatedVendor = await vendorRepository.updateById(String(vendor._id), normalizedPayload);
     if (!updatedVendor) {
       throw new ApiError(404, "Vendor not found");
@@ -836,12 +900,21 @@ export const vendorService = {
       excludeVendorId: vendorId,
     });
 
-    const linkedUser = await ensureVendorUserAccount(normalizedPayload);
-    await syncLocationIfPresent(normalizedPayload);
-
-    if (linkedUser?._id) {
-      normalizedPayload.userId = linkedUser._id;
+    const linkedUserId = existingVendor.userId;
+    if (linkedUserId) {
+      await syncUserAccount(String(linkedUserId), normalizedPayload, existingVendor.toObject());
+    } else {
+      const linkedUser = await ensureVendorUserAccount({
+        email: normalizedPayload.email ?? existingVendor.email,
+        mobile: normalizedPayload.mobile ?? existingVendor.mobile,
+        ownerName: normalizedPayload.ownerName ?? existingVendor.ownerName,
+        businessName: normalizedPayload.businessName ?? existingVendor.businessName,
+      });
+      if (linkedUser?._id) {
+        normalizedPayload.userId = linkedUser._id;
+      }
     }
+    await syncLocationIfPresent(normalizedPayload);
 
     const allowExtendedMedia = await hasActiveProSubscription(vendorId);
     enforceVendorServiceZonePolicy(normalizedPayload, {

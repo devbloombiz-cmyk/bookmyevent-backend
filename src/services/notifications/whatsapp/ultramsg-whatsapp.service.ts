@@ -25,16 +25,43 @@ function trimTrailingSlash(value: string) {
 }
 
 function normalizeWhatsappNumber(rawMobile: string) {
-  const source = String(rawMobile || "").trim();
-  const startsWithPlus = source.startsWith("+");
-  const digitsOnly = source.replace(/\D/g, "");
-  const normalized = startsWithPlus ? `+${digitsOnly}` : digitsOnly;
+  let source = String(rawMobile || "").trim();
 
-  if (digitsOnly.length < 8 || digitsOnly.length > 15) {
-    throw new ApiError(400, "Invalid mobile number for WhatsApp OTP delivery");
+  // Handle double-zero prefix
+  if (source.startsWith("00")) {
+    source = "+" + source.slice(2);
   }
 
-  return normalized;
+  const startsWithPlus = source.startsWith("+");
+  let digitsOnly = source.replace(/\D/g, "");
+
+  // If no plus sign, analyze if we need to prepend country code
+  if (!startsWithPlus) {
+    const isIndianWithCode = digitsOnly.length === 12 && digitsOnly.startsWith("91");
+    const isUaeWithCode = digitsOnly.length === 12 && digitsOnly.startsWith("971");
+
+    if (!isIndianWithCode && !isUaeWithCode) {
+      if (digitsOnly.length === 10) {
+        if (digitsOnly.startsWith("0")) {
+          // UAE local format: e.g., 05XXXXXXXX -> 9715XXXXXXXX
+          digitsOnly = "971" + digitsOnly.slice(1);
+        } else {
+          // Indian format: e.g., 9847882076 -> 919847882076
+          digitsOnly = "91" + digitsOnly;
+        }
+      } else if (digitsOnly.length === 9) {
+        // UAE format: e.g., 50XXXXXXX -> 97150XXXXXXX
+        digitsOnly = "971" + digitsOnly;
+      }
+    }
+  }
+
+  if (digitsOnly.length < 8 || digitsOnly.length > 15) {
+    throw new ApiError(400, "Invalid mobile number for WhatsApp delivery");
+  }
+
+  // UltraMsg expects digits only without '+' sign prefix
+  return digitsOnly;
 }
 
 function maskWhatsappNumber(mobile: string) {

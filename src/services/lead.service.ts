@@ -38,7 +38,7 @@ const validLeadTransitions: Record<string, string[]> = {
 function normalizeMobile(rawValue: string) {
   const trimmed = String(rawValue || "").trim();
   const digits = trimmed.replace(/\D/g, "");
-  return digits.length >= 10 ? digits : "";
+  return digits.length >= 9 ? digits : "";
 }
 
 function extractFromMessage(message: string | undefined, label: string) {

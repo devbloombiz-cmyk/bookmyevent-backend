@@ -9,6 +9,8 @@ import {
 import { subscriptionService } from "./subscription.service";
 import { venueOwnerRepository } from "../repositories/venue-owner.repository";
 import { userRepository } from "../repositories/user.repository";
+import { deleteManyFromS3 } from "../utils/s3";
+import { logger } from "../config/logger";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
   permissions: PermissionKey[];
@@ -281,19 +283,52 @@ export const packageService = {
       throw new ApiError(404, "Vendor package not found");
     }
 
+    const deletedUrls: string[] = [];
+
+    if ("coverImage" in normalizedPayload) {
+      const oldCover = String(existing.coverImage || "").trim();
+      const newCover = String(normalizedPayload.coverImage || "").trim();
+      if (oldCover && oldCover !== newCover) {
+        deletedUrls.push(oldCover);
+      }
+    }
+
+    if (
+      "portfolioImages" in normalizedPayload &&
+      Array.isArray(normalizedPayload.portfolioImages)
+    ) {
+      const oldPortfolio = Array.isArray(existing.portfolioImages) ? existing.portfolioImages : [];
+      const newPortfolioSet = new Set(
+        normalizedPayload.portfolioImages.map((url) => String(url || "").trim()),
+      );
+
+      for (const url of oldPortfolio) {
+        const trimmedUrl = String(url || "").trim();
+        if (trimmedUrl && !newPortfolioSet.has(trimmedUrl)) {
+          deletedUrls.push(trimmedUrl);
+        }
+      }
+    }
+
+    if (deletedUrls.length > 0) {
+      deleteManyFromS3(deletedUrls).catch((err) => {
+        logger.error({ err, deletedUrls }, "Error in updateVendorPackage S3 cleanup");
+      });
+    }
+
     return vendorPackage;
   },
   deleteVendorPackage: async (packageId: string, authUser: AuthUser) => {
+    const existing = await packageRepository.findVendorPackageById(packageId);
+    if (!existing) {
+      throw new ApiError(404, "Vendor package not found");
+    }
+
     const hasOwnScope =
       authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
       authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
 
     if (authUser.permissions.includes(PermissionKeys.PackageVendorDeleteOwn) && hasOwnScope) {
-      const existing = await packageRepository.findVendorPackageById(packageId);
-      if (!existing) {
-        throw new ApiError(404, "Vendor package not found");
-      }
-
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existing.vendorId) !== ownVendorId) {
         throw new ApiError(403, "You are not allowed to delete this package");
@@ -316,6 +351,22 @@ export const packageService = {
     if (!vendorPackage) {
       throw new ApiError(404, "Vendor package not found");
     }
+
+    const urlsToDelete: string[] = [];
+    if (existing.coverImage) {
+      urlsToDelete.push(String(existing.coverImage));
+    }
+    if (Array.isArray(existing.portfolioImages)) {
+      for (const url of existing.portfolioImages) {
+        if (url) urlsToDelete.push(String(url));
+      }
+    }
+    if (urlsToDelete.length > 0) {
+      deleteManyFromS3(urlsToDelete).catch((err) => {
+        logger.error({ err, urlsToDelete }, "Error deleting vendor package images from S3");
+      });
+    }
+
     return vendorPackage;
   },
   createPlatformPackage: (payload: Record<string, unknown>) =>

@@ -3,7 +3,7 @@ import { getRedisClient } from "../config/redis";
 import { logger } from "../config/logger";
 
 const WINDOW_MS = 10 * 60 * 1000;
-const MAX_REQUESTS = 50;
+const MAX_REQUESTS = 5;
 const requestBuckets = new Map<string, number[]>();
 const REDIS_KEY_PREFIX = "otp:rate-limit";
 

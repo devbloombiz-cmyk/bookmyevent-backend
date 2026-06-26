@@ -7,6 +7,7 @@ import { leadRepository } from "../repositories/lead.repository";
 import { paymentRequestRepository } from "../repositories/payment-request.repository";
 import { subscriptionRepository } from "../repositories/subscription.repository";
 import { userRepository } from "../repositories/user.repository";
+import { availabilityRepository } from "../repositories/availability.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
@@ -1131,6 +1132,15 @@ export const paymentRequestService = {
       packageId: resolvedPackageId,
       bookingId: (booking as { _id?: unknown })._id,
     });
+
+    if (booking.eventDate && booking.eventSlot) {
+      await availabilityRepository.upsertSlot({
+        vendorId: String(booking.vendorId),
+        date: new Date(booking.eventDate),
+        slot: String(booking.eventSlot),
+        status: "booked",
+      });
+    }
 
     await activityTimelineService.addEvent({
       entityType: "booking",

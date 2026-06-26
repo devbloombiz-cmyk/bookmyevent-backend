@@ -22,9 +22,11 @@ export const galleryRepository = {
       query.sourceType = filters.sourceType.trim();
     }
 
-    const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(120, filters.limit)) : 60;
+    const limit =
+      typeof filters.limit === "number" ? Math.max(1, Math.min(120, filters.limit)) : 60;
     return GalleryModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
+  findById: (galleryId: string) => GalleryModel.findById(galleryId),
   updateById: (galleryId: string, payload: Record<string, unknown>) =>
     GalleryModel.findByIdAndUpdate(galleryId, payload, { returnDocument: "after" }),
   deleteById: (galleryId: string) => GalleryModel.findByIdAndDelete(galleryId),

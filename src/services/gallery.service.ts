@@ -1,5 +1,7 @@
 import { galleryRepository } from "../repositories/gallery.repository";
 import { ApiError } from "../utils/api-error";
+import { deleteManyFromS3 } from "../utils/s3";
+import { logger } from "../config/logger";
 
 const normalizeUrl = (value: unknown) => {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -89,10 +91,39 @@ export const galleryService = {
     galleryRepository.create(normalizeGalleryPayload(payload)),
   listGalleryItems: (filters: Record<string, unknown>) => galleryRepository.list(filters),
   updateGalleryItem: async (galleryId: string, payload: Record<string, unknown>) => {
-    const galleryItem = await galleryRepository.updateById(galleryId, normalizeGalleryPayload(payload));
+    const existing = await galleryRepository.findById(galleryId);
+    if (!existing) {
+      throw new ApiError(404, "Gallery item not found");
+    }
+
+    const normalized = normalizeGalleryPayload(payload);
+    const galleryItem = await galleryRepository.updateById(galleryId, normalized);
     if (!galleryItem) {
       throw new ApiError(404, "Gallery item not found");
     }
+
+    const deletedUrls: string[] = [];
+    if ("mediaUrl" in normalized) {
+      const oldUrl = String(existing.mediaUrl || "").trim();
+      const newUrl = String(normalized.mediaUrl || "").trim();
+      if (oldUrl && oldUrl !== newUrl) {
+        deletedUrls.push(oldUrl);
+      }
+    }
+    if ("thumbnailUrl" in normalized) {
+      const oldThumb = String(existing.thumbnailUrl || "").trim();
+      const newThumb = String(normalized.thumbnailUrl || "").trim();
+      if (oldThumb && oldThumb !== newThumb) {
+        deletedUrls.push(oldThumb);
+      }
+    }
+
+    if (deletedUrls.length > 0) {
+      deleteManyFromS3(deletedUrls).catch((err) => {
+        logger.error({ err, deletedUrls }, "Error in updateGalleryItem S3 cleanup");
+      });
+    }
+
     return galleryItem;
   },
   deleteGalleryItem: async (galleryId: string) => {
@@ -100,6 +131,21 @@ export const galleryService = {
     if (!galleryItem) {
       throw new ApiError(404, "Gallery item not found");
     }
+
+    const urlsToDelete: string[] = [];
+    if (galleryItem.mediaUrl) {
+      urlsToDelete.push(String(galleryItem.mediaUrl));
+    }
+    if (galleryItem.thumbnailUrl) {
+      urlsToDelete.push(String(galleryItem.thumbnailUrl));
+    }
+
+    if (urlsToDelete.length > 0) {
+      deleteManyFromS3(urlsToDelete).catch((err) => {
+        logger.error({ err, urlsToDelete }, "Error deleting gallery item images from S3");
+      });
+    }
+
     return galleryItem;
   },
   createVendorPortfolioGalleryItems: async (payload: {

@@ -292,6 +292,15 @@ export const bookingService = {
       booking = await bookingRepository.create(normalizedPayload);
     }
 
+    if (booking.eventDate && booking.eventSlot && booking.bookingStatus !== "cancelled") {
+      await availabilityRepository.upsertSlot({
+        vendorId: String(booking.vendorId),
+        date: new Date(booking.eventDate),
+        slot: String(booking.eventSlot),
+        status: "booked",
+      });
+    }
+
     setImmediate(() => {
       void bookingNotificationService.sendCustomerBookingConfirmation({
         bookingId: String(booking.id),
@@ -346,6 +355,10 @@ export const bookingService = {
     if (!existing) {
       throw new ApiError(404, "Booking not found");
     }
+
+    const oldDate = existing.eventDate;
+    const oldSlot = existing.eventSlot;
+    const oldVendorId = existing.vendorId;
 
     if (
       authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
@@ -468,28 +481,46 @@ export const bookingService = {
       throw new ApiError(404, "Booking not found");
     }
 
-    if (typeof payload.bookingStatus === "string" && booking.eventDate && booking.eventSlot) {
-      const nextAvailabilityStatus = payload.bookingStatus === "cancelled" ? "available" : "booked";
+    if (booking.eventDate && booking.eventSlot) {
+      const isCancelled = String(payload.bookingStatus ?? booking.bookingStatus) === "cancelled";
+      const nextAvailabilityStatus = isCancelled ? "available" : "booked";
+
+      const dateChanged =
+        oldDate && new Date(oldDate).getTime() !== new Date(booking.eventDate).getTime();
+      const slotChanged = oldSlot && String(oldSlot) !== String(booking.eventSlot);
+      const vendorChanged = oldVendorId && String(oldVendorId) !== String(booking.vendorId);
+
+      if (dateChanged || slotChanged || vendorChanged) {
+        if (oldDate && oldSlot && oldVendorId) {
+          await availabilityRepository.upsertSlot({
+            vendorId: String(oldVendorId),
+            date: new Date(oldDate),
+            slot: String(oldSlot),
+            status: "available",
+          });
+        }
+      }
+
       await availabilityRepository.upsertSlot({
         vendorId: String(booking.vendorId),
         date: new Date(booking.eventDate),
         slot: String(booking.eventSlot),
         status: nextAvailabilityStatus,
       });
+    }
 
-      if (payload.bookingStatus === "completed") {
-        await activityTimelineService.addEvent({
-          entityType: "booking",
-          entityId: String(booking._id),
-          vendorId: String(booking.vendorId),
-          actorUserId: authUser.id,
-          event: "BOOKING_COMPLETED",
-          message: "Booking marked completed",
-          metadata: {
-            reviewPath: `/review/${String(booking._id)}`,
-          },
-        });
-      }
+    if (payload.bookingStatus === "completed") {
+      await activityTimelineService.addEvent({
+        entityType: "booking",
+        entityId: String(booking._id),
+        vendorId: String(booking.vendorId),
+        actorUserId: authUser.id,
+        event: "BOOKING_COMPLETED",
+        message: "Booking marked completed",
+        metadata: {
+          reviewPath: `/review/${String(booking._id)}`,
+        },
+      });
     }
 
     return booking;

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import mongoose from "mongoose";
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -18,7 +19,7 @@ async function migrate() {
       let needsSave = false;
 
       // venuePackages is a mongoose DocumentArray now, but let's iterate and ensure _id exists
-      venue.venuePackages.forEach((pkg: any) => {
+      venue.venuePackages.forEach((pkg) => {
         if (!pkg._id) {
           pkg._id = new mongoose.Types.ObjectId();
           needsSave = true;

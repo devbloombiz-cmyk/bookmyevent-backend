@@ -23,6 +23,9 @@ export const LEAD_STATUSES = [
   "CONFIRMED",
   "COMPLETED",
   "CANCELLED",
+  "Pending",
+  "Accepted",
+  "Rejected",
 ] as const;
 
 export type LeadStatus = (typeof LEAD_STATUSES)[number];

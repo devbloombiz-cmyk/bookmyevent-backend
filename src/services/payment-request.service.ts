@@ -8,6 +8,7 @@ import { paymentRequestRepository } from "../repositories/payment-request.reposi
 import { subscriptionRepository } from "../repositories/subscription.repository";
 import { userRepository } from "../repositories/user.repository";
 import { availabilityRepository } from "../repositories/availability.repository";
+import { vendorRepository } from "../repositories/vendor.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
 import { ApiError } from "../utils/api-error";
@@ -434,11 +435,12 @@ async function trySendPaymentLinkWhatsapp(payload: {
   return true;
 }
 
-async function trySendBookingConfirmedWhatsapp(payload: {
+export async function trySendBookingConfirmedWhatsapp(payload: {
   mobile: string;
   bookingId: string;
   customerName?: string;
   packageName?: string;
+  vendorName?: string;
   eventDate?: Date;
 }) {
   if (!payload.mobile || !ultramsgWhatsappService.isEnabled()) {
@@ -460,6 +462,7 @@ async function trySendBookingConfirmedWhatsapp(payload: {
     "Your booking has been successfully confirmed.",
     "",
     "* Booking Details",
+    payload.vendorName ? `* Vendor: ${payload.vendorName}` : "",
     payload.packageName ? `* Package: ${payload.packageName}` : "",
     eventDateLabel ? `* Event Date: ${eventDateLabel}` : "",
     `* Booking ID: ${payload.bookingId}`,
@@ -510,6 +513,153 @@ async function applyPaymentToBooking(bookingId: string, amountPaidDelta: number)
 }
 
 export const paymentRequestService = {
+  createOfferForLeadWithoutAuth: async (
+    leadId: string,
+    payload: { packageId: string; packageName: string; quoteAmount: number; advanceAmount: number },
+    ipAddress: string,
+  ) => {
+    const lead = await leadRepository.findById(leadId);
+    if (!lead) {
+      throw new ApiError(404, "Lead not found");
+    }
+
+    if (!payload.packageId) {
+      throw new ApiError(400, "packageId is required");
+    }
+
+    if (!Number.isFinite(payload.quoteAmount) || payload.quoteAmount <= 0) {
+      throw new ApiError(400, "finalAmount must be greater than zero");
+    }
+
+    if (!Number.isFinite(payload.advanceAmount) || payload.advanceAmount <= 0) {
+      throw new ApiError(400, "advanceAmount must be greater than zero");
+    }
+
+    if (payload.advanceAmount > payload.quoteAmount) {
+      throw new ApiError(400, "advanceAmount cannot exceed finalAmount");
+    }
+
+    const customerName =
+      String(lead.customerName || "").trim() ||
+      extractFromMessage(String(lead.message || ""), "Customer") ||
+      "Customer";
+    const customerMobile =
+      normalizeMobile(String(lead.customerMobile || "")) ||
+      normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
+    const customerEmail =
+      String(lead.customerEmail || "").trim() ||
+      extractFromMessage(String(lead.message || ""), "Email");
+
+    if (!customerMobile) {
+      throw new ApiError(400, "Customer mobile number is required to generate payment link");
+    }
+
+    const referenceId = buildRazorpayReferenceId("lead", String(lead._id));
+
+    let paymentLink: { id: string; shortUrl: string; referenceId: string };
+    try {
+      paymentLink = await createRazorpayPaymentLink({
+        customerName,
+        customerMobile,
+        customerEmail,
+        amount: payload.advanceAmount,
+        referenceId,
+        expiryEpochSeconds: undefined,
+        notes: {
+          leadId: String(lead._id),
+          paymentType: "ADVANCE",
+        },
+      });
+    } catch (error) {
+      const normalizedError = toPaymentLinkApiError(error);
+      logger.error(
+        {
+          event: "payment.link.create_failed",
+          leadId: String(lead._id),
+          referenceId,
+          statusCode: extractErrorStatusCode(error),
+          errorMessage: extractErrorMessage(error),
+          error,
+        },
+        "Razorpay payment link creation failed",
+      );
+      throw normalizedError;
+    }
+
+    if (!paymentLink.id || !paymentLink.shortUrl) {
+      logger.error(
+        {
+          event: "payment.link.invalid_response",
+          leadId: String(lead._id),
+          referenceId,
+          response: paymentLink,
+        },
+        "Razorpay payment link response is missing required fields",
+      );
+      throw new ApiError(502, "Unable to generate payment link. Please try again.");
+    }
+
+    const sentToWhatsapp = await trySendPaymentLinkWhatsapp({
+      mobile: customerMobile,
+      amount: payload.advanceAmount,
+      paymentLink: paymentLink.shortUrl,
+      notes: "Generated via WhatsApp magic review link",
+      customerName,
+      customerEmail,
+      packageName: payload.packageName || lead.venuePackageName || "Selected Package",
+      eventType: lead.venuePackageName || "Event",
+      eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
+      functionTime: lead.eventSlot || "",
+    }).catch(() => false);
+
+    const paymentRequest = await paymentRequestRepository.create({
+      leadId: lead._id,
+      vendorId: lead.vendorId,
+      customerId: lead.customerId ?? null,
+      packageId: payload.packageId,
+      packageName: payload.packageName || lead.venuePackageName || "Selected Package",
+      paymentType: "ADVANCE",
+      status: "pending",
+      finalAmount: payload.quoteAmount,
+      requestedAmount: payload.advanceAmount,
+      paidAmount: 0,
+      notes: "Generated via WhatsApp magic review link",
+      paymentExpiry: null,
+      razorpayPaymentLinkId: paymentLink.id,
+      razorpayReferenceId: paymentLink.referenceId,
+      paymentLinkUrl: paymentLink.shortUrl,
+      sentToWhatsapp,
+      metadata: {
+        source: "LEAD_OFFER",
+      },
+    });
+
+    await leadRepository.updateById(leadId, {
+      status: "CONTACTED",
+      packageId: payload.packageId,
+      venuePackageName: payload.packageName || lead.venuePackageName || "Selected Package",
+      quoteAmount: payload.quoteAmount,
+      paymentLink: paymentLink.shortUrl,
+      paymentStatus: "pending",
+    });
+
+    await activityTimelineService.addEvent({
+      entityType: "lead",
+      entityId: String(lead._id),
+      vendorId: String(lead.vendorId),
+      actorUserId: undefined,
+      event: "OFFER_CREATED",
+      message: `Offer created and payment link generated via WhatsApp magic link (IP: ${ipAddress})`,
+      metadata: {
+        paymentRequestId: String(paymentRequest._id),
+        finalAmount: payload.quoteAmount,
+        advanceAmount: payload.advanceAmount,
+      },
+    });
+
+    return paymentRequest;
+  },
+
   createOfferForLead: async (leadId: string, payload: CreateOfferPayload, authUser: AuthUser) => {
     const lead = await ensureLeadAccess(leadId, authUser);
 
@@ -1160,6 +1310,9 @@ export const paymentRequestService = {
       normalizeMobile(String(lead.customerMobile || "")) ||
       normalizeMobile(extractFromMessage(String(lead.message || ""), "Mobile"));
     if (mobile) {
+      const vendorObj = await vendorRepository.findById(String(lead.vendorId));
+      const vendorName = vendorObj?.businessName?.trim() || vendorObj?.ownerName?.trim() || "";
+
       await trySendBookingConfirmedWhatsapp({
         mobile,
         bookingId: String((booking as { _id?: unknown })._id || ""),
@@ -1170,6 +1323,7 @@ export const paymentRequestService = {
             lead.venuePackageName ||
             "",
         ),
+        vendorName,
         eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
       });
     }

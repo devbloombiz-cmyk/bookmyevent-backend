@@ -22,7 +22,7 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
 
   if (reviewToken) {
     const baseUrl = (env.APP_BASE_URL || "https://bookmyevent.com").replace(/\/$/, "");
-    const reviewUrl = `${baseUrl}/vendor-lead/review/${reviewToken}`;
+    const reviewUrl = `${baseUrl}/api/vendor-lead/review/${reviewToken}`;
 
     const lines = [
       `Hello ${payload.vendorName},`,

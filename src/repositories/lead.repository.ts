@@ -43,6 +43,9 @@ export const leadRepository = {
       },
     }),
   findById: (leadId: string) => LeadModel.findById(leadId),
+  findByAcceptToken: (token: string) => LeadModel.findOne({ acceptToken: token }),
+  findByRejectToken: (token: string) => LeadModel.findOne({ rejectToken: token }),
+  findByReviewToken: (token: string) => LeadModel.findOne({ reviewToken: token }),
   updateById: (leadId: string, payload: Record<string, unknown>) =>
     LeadModel.findByIdAndUpdate(leadId, payload, { returnDocument: "after" }),
 };

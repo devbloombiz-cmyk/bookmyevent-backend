@@ -1,3 +1,5 @@
+import crypto from "crypto";
+import { env } from "../config/env";
 import { leadRepository } from "../repositories/lead.repository";
 import { PermissionKeys, type PermissionKey } from "../config/permissions";
 import type { AuthenticatedUser } from "../types/auth-user";
@@ -10,9 +12,10 @@ import {
 } from "./vendor-identity.service";
 import { leadNotificationService } from "./notifications/lead/lead-notification.service";
 import { logger } from "../config/logger";
-import { paymentRequestService } from "./payment-request.service";
+import { paymentRequestService, trySendBookingConfirmedWhatsapp } from "./payment-request.service";
 import { ultramsgWhatsappService } from "./notifications/whatsapp/ultramsg-whatsapp.service";
 import { vendorRepository } from "../repositories/vendor.repository";
+import { packageRepository } from "../repositories/package.repository";
 import { bookingPolicyService } from "./booking-policy.service";
 
 type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
@@ -20,7 +23,10 @@ type AuthUser = Pick<AuthenticatedUser, "id" | "permissions"> & {
 };
 
 const validLeadTransitions: Record<string, string[]> = {
-  NEW: ["CONTACTED", "LOST", "CANCELLED"],
+  Pending: ["Accepted", "Rejected", "CONTACTED", "LOST", "CANCELLED"],
+  NEW: ["Accepted", "Rejected", "CONTACTED", "LOST", "CANCELLED"],
+  Accepted: ["CONTACTED", "BOOKED", "LOST", "CANCELLED"],
+  Rejected: ["LOST", "CANCELLED"],
   CONTACTED: ["PAYMENT_DONE", "BOOKED", "LOST", "CANCELLED"],
   PAYMENT_DONE: ["BOOKED", "LOST", "CANCELLED"],
   BOOKED: ["COMPLETED", "CANCELLED"],
@@ -205,28 +211,40 @@ export const leadService = {
       referralVendorId = String(referralVendor._id);
     }
 
+    const acceptToken = crypto.randomBytes(32).toString("hex");
+    const rejectToken = crypto.randomBytes(32).toString("hex");
+    const reviewToken = crypto.randomBytes(32).toString("hex");
+    const expiryHours = Number(env.VENDOR_LEAD_ACTION_LINK_EXPIRY_HOURS || 24);
+    const tokenExpiry = new Date(Date.now() + expiryHours * 60 * 60 * 1000);
+
     const lead = await leadRepository.create({
       ...payload,
       vendorId,
       venueOwnerId: venueOwnerId || null,
       customerId: customerId || null,
       customerMobile: String(payload.customerMobile || customerMobile || ""),
+      status: "Pending",
+      acceptToken,
+      rejectToken,
+      reviewToken,
+      tokenExpiry,
+      acceptTokenUsed: false,
+      rejectTokenUsed: false,
+      reviewTokenUsed: false,
       referralCode,
       referralVendorId,
     });
 
-    if (lead.customerId) {
-      setImmediate(() => {
-        void leadNotificationService.sendVendorLeadCreatedWhatsapp({
-          leadId: String(lead.id),
-          vendorId: String(lead.vendorId),
-          customerId: String(lead.customerId),
-          eventDate: new Date(lead.eventDate),
-          eventSlot: String(lead.eventSlot || "Full Day"),
-          location: String(lead.location || ""),
-        });
+    setImmediate(() => {
+      void leadNotificationService.sendVendorLeadCreatedWhatsapp({
+        leadId: String(lead.id),
+        vendorId: String(lead.vendorId),
+        customerId: String(lead.customerId || ""),
+        eventDate: new Date(lead.eventDate),
+        eventSlot: String(lead.eventSlot || "Full Day"),
+        location: String(lead.location || ""),
       });
-    }
+    });
 
     const notificationMobile =
       normalizeMobile(String(lead.customerMobile || "")) ||
@@ -431,6 +449,26 @@ export const leadService = {
         date: new Date(lead.eventDate),
         slot: String(lead.eventSlot),
         status: "booked",
+      });
+    }
+
+    if (customerMobile) {
+      const pkg = await packageRepository.findVendorPackageById(payload.packageId);
+      const packageName = pkg ? pkg.title : (lead.venuePackageName || "Selected Package");
+      const vendorObj = await vendorRepository.findById(String(lead.vendorId));
+      const vendorName = vendorObj?.businessName?.trim() || vendorObj?.ownerName?.trim() || "";
+
+      setImmediate(() => {
+        trySendBookingConfirmedWhatsapp({
+          mobile: customerMobile,
+          bookingId: String(booking._id),
+          customerName,
+          packageName,
+          vendorName,
+          eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
+        }).catch((err) => {
+          logger.warn({ error: err, bookingId: booking._id }, "Failed to send booking confirmation whatsapp on direct conversion");
+        });
       });
     }
 

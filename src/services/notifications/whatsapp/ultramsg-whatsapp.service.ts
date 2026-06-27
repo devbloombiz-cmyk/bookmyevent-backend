@@ -11,7 +11,9 @@ type UltraMsgSendMessagePayload = {
     | "booking_confirmation"
     | "vendor_lead_notification"
     | "vendor_approval"
-    | "venue_owner_approval";
+    | "venue_owner_approval"
+    | "customer_lead_accepted"
+    | "customer_lead_rejected";
 };
 
 type UltraMsgApiResponse = {

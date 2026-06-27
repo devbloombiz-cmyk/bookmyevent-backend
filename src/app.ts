@@ -10,6 +10,7 @@ import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middlew
 import { enforceJsonRequests, sanitizeRequestMiddleware } from "./middlewares/sanitize.middleware";
 import { apiV1Router } from "./routes";
 import { webhookRouter } from "./routes/webhook.route";
+import { vendorLeadActionRouter } from "./routes/vendor-lead-action.route";
 
 export const app = express();
 
@@ -61,7 +62,19 @@ app.use(
   }),
 );
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+  })
+);
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -71,7 +84,13 @@ app.use(
         return;
       }
 
-      if (allowedOrigins.includes(origin)) {
+      if (
+        allowedOrigins.includes(origin) ||
+        (env.NODE_ENV === "development" &&
+          /^https?:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(
+            origin,
+          ))
+      ) {
         callback(null, true);
         return;
       }
@@ -124,6 +143,9 @@ app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(enforceJsonRequests);
 app.use(sanitizeRequestMiddleware);
+
+app.use("/api/vendor-lead", vendorLeadActionRouter);
+app.use("/vendor-lead", vendorLeadActionRouter);
 
 app.use("/api/v1", apiV1Router);
 

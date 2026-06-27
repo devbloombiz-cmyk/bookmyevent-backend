@@ -1,25 +1,32 @@
 import type { Request, Response } from "express";
 import { vendorLeadActionService } from "../services/vendor-lead-action.service";
-import { renderStatusPage, successIconSvg, errorIconSvg, warnIconSvg, renderLeadReviewPage } from "../utils/html-template";
+import {
+  renderStatusPage,
+  successIconSvg,
+  errorIconSvg,
+  warnIconSvg,
+  renderLeadReviewPage,
+} from "../utils/html-template";
 import { logger } from "../config/logger";
 
 function getClientDetails(req: Request) {
   const xForwardedFor = req.headers["x-forwarded-for"];
-  let ipAddress = "";
-  if (typeof xForwardedFor === "string") {
-    ipAddress = xForwardedFor;
-  } else if (Array.isArray(xForwardedFor)) {
-    ipAddress = xForwardedFor[0] || "";
-  } else {
-    ipAddress = req.ip || "";
-  }
+  const ipAddress =
+    typeof xForwardedFor === "string"
+      ? xForwardedFor
+      : Array.isArray(xForwardedFor)
+        ? xForwardedFor[0] || ""
+        : req.ip || "";
   const rawUserAgent = req.headers["user-agent"];
   const userAgent = (Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent) || "";
   return { ipAddress, userAgent };
 }
 
-function handleControllerError(res: Response, error: any, token: string, actionName: string) {
-  logger.warn({ error, token, action: actionName }, `Failed vendor-lead-action during ${actionName}`);
+function handleControllerError(res: Response, error: unknown, token: string, actionName: string) {
+  logger.warn(
+    { error, token, action: actionName },
+    `Failed vendor-lead-action during ${actionName}`,
+  );
 
   let heading = "Link Invalid or Expired";
   let message = "This action link is no longer valid.";
@@ -31,19 +38,21 @@ function handleControllerError(res: Response, error: any, token: string, actionN
     <li>Invalid token</li>
   `;
 
-  if (error.message === "ALREADY_ACCEPTED") {
+  const errMsg = error instanceof Error ? error.message : String(error);
+
+  if (errMsg === "ALREADY_ACCEPTED") {
     heading = "Action Already Completed";
     message = "Lead already accepted and offer sent.";
     iconClass = "icon-warn";
     iconSvg = warnIconSvg;
     bulletContent = "";
-  } else if (error.message === "ALREADY_REJECTED") {
+  } else if (errMsg === "ALREADY_REJECTED") {
     heading = "Action Already Completed";
     message = "Lead already rejected/cancelled.";
     iconClass = "icon-warn";
     iconSvg = warnIconSvg;
     bulletContent = "";
-  } else if (error.message === "ALREADY_PROCESSED") {
+  } else if (errMsg === "ALREADY_PROCESSED") {
     heading = "Action Already Completed";
     message = "Lead has already been processed.";
     iconClass = "icon-warn";
@@ -74,13 +83,14 @@ export const vendorLeadActionController = {
       const html = renderStatusPage({
         title: "Booking Confirmed",
         heading: "✅ Booking Confirmed",
-        message: "The booking has been successfully created. Customer has been notified and it is now visible in your Bookings panel.",
+        message:
+          "The booking has been successfully created. Customer has been notified and it is now visible in your Bookings panel.",
         iconClass: "icon-success",
         iconSvg: successIconSvg,
       });
 
       res.status(200).send(html);
-    } catch (error: any) {
+    } catch (error) {
       handleControllerError(res, error, token, "acceptLead");
     }
   },
@@ -101,7 +111,7 @@ export const vendorLeadActionController = {
       });
 
       res.status(200).send(html);
-    } catch (error: any) {
+    } catch (error) {
       handleControllerError(res, error, token, "rejectLead");
     }
   },
@@ -110,10 +120,10 @@ export const vendorLeadActionController = {
     const token = String(req.params.token);
 
     try {
-      const { lead, packages } = await vendorLeadActionService.getLeadAndPackagesForReview(token);
-      const html = renderLeadReviewPage(lead, packages);
+      const { lead } = await vendorLeadActionService.getLeadAndPackagesForReview(token);
+      const html = renderLeadReviewPage(lead);
       res.status(200).send(html);
-    } catch (error: any) {
+    } catch (error) {
       handleControllerError(res, error, token, "reviewLead");
     }
   },
@@ -123,22 +133,19 @@ export const vendorLeadActionController = {
     const { ipAddress, userAgent } = getClientDetails(req);
 
     try {
-      await vendorLeadActionService.acceptLeadWithReviewToken(
-        token,
-        ipAddress,
-        userAgent
-      );
+      await vendorLeadActionService.acceptLeadWithReviewToken(token, ipAddress, userAgent);
 
       const html = renderStatusPage({
         title: "Booking Confirmed",
         heading: "✅ Booking Confirmed",
-        message: "The booking has been successfully created. Customer has been notified and it is now visible in your Bookings panel.",
+        message:
+          "The booking has been successfully created. Customer has been notified and it is now visible in your Bookings panel.",
         iconClass: "icon-success",
         iconSvg: successIconSvg,
       });
 
       res.status(200).send(html);
-    } catch (error: any) {
+    } catch (error) {
       handleControllerError(res, error, token, "acceptLeadWithReviewToken");
     }
   },
@@ -159,7 +166,7 @@ export const vendorLeadActionController = {
       });
 
       res.status(200).send(html);
-    } catch (error: any) {
+    } catch (error) {
       handleControllerError(res, error, token, "rejectLeadWithReviewToken");
     }
   },

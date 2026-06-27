@@ -517,7 +517,6 @@ export const paymentRequestService = {
     leadId: string,
     payload: { packageId: string; packageName: string; quoteAmount: number; advanceAmount: number },
     ipAddress: string,
-    userAgent: string
   ) => {
     const lead = await leadRepository.findById(leadId);
     if (!lead) {
@@ -582,7 +581,7 @@ export const paymentRequestService = {
           errorMessage: extractErrorMessage(error),
           error,
         },
-        "Razorpay payment link creation failed"
+        "Razorpay payment link creation failed",
       );
       throw normalizedError;
     }
@@ -595,7 +594,7 @@ export const paymentRequestService = {
           referenceId,
           response: paymentLink,
         },
-        "Razorpay payment link response is missing required fields"
+        "Razorpay payment link response is missing required fields",
       );
       throw new ApiError(502, "Unable to generate payment link. Please try again.");
     }

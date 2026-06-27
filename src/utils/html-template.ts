@@ -140,25 +140,20 @@ export const warnIconSvg = `
 </svg>
 `;
 
-export function renderLeadReviewPage(lead: any, packages: any[]): string {
+interface ReviewLeadInput {
+  eventDate?: string | Date | null;
+  customerName?: string | null;
+  customerMobile?: string | null;
+  customerEmail?: string | null;
+  eventSlot?: string | null;
+  location?: string | null;
+  message?: string | null;
+}
+
+export function renderLeadReviewPage(lead: ReviewLeadInput): string {
   const eventDateStr = lead.eventDate
     ? new Date(lead.eventDate).toISOString().slice(0, 10)
     : "Not specified";
-
-  const packagesJson = JSON.stringify(
-    packages.map((p) => ({
-      _id: String(p._id),
-      title: String(p.title),
-      price: Number(p.price),
-    }))
-  );
-
-  const packageOptions = packages
-    .map(
-      (p) =>
-        `<option value="${p._id}">${p.title} - INR ${p.price.toLocaleString("en-IN")}</option>`
-    )
-    .join("\n");
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -400,12 +395,16 @@ export function renderLeadReviewPage(lead: any, packages: any[]): string {
           <span class="info-label">Location</span>
           <span class="info-value">${lead.location || "Not specified"}</span>
         </div>
-        ${lead.message ? `
+        ${
+          lead.message
+            ? `
         <div class="info-item" style="grid-column: 1 / -1;">
           <span class="info-label">Customer Notes / Message</span>
           <div class="message-box">${lead.message}</div>
         </div>
-        ` : ""}
+        `
+            : ""
+        }
       </div>
     </div>
 
@@ -507,4 +506,3 @@ export function renderLeadReviewPage(lead: any, packages: any[]): string {
 </body>
 </html>`;
 }
-

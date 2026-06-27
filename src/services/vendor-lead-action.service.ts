@@ -12,6 +12,9 @@ import { vendorRepository } from "../repositories/vendor.repository";
 import { VenueOwnerModel } from "../models/venue-owner.model";
 import { PlatformPackageModel } from "../models/platform-package.model";
 import { VendorPackageModel } from "../models/vendor-package.model";
+import { LeadModel } from "../models/lead.model";
+
+type LeadDocument = InstanceType<typeof LeadModel>;
 
 function normalizeMobile(rawValue: string) {
   const trimmed = String(rawValue || "").trim();
@@ -48,18 +51,24 @@ function extractFromMessage(message: string | undefined, label: string) {
 }
 
 async function resolvePackagePriceAndName(
-  lead: any,
-  vendorId: string | null
+  lead: LeadDocument,
+  vendorId: string | null,
 ): Promise<{ packageId: string | null; amount: number; packageName: string }> {
-  let packageId = lead.packageId && mongoose.Types.ObjectId.isValid(lead.packageId) ? String(lead.packageId) : null;
+  let packageId =
+    lead.packageId && mongoose.Types.ObjectId.isValid(lead.packageId)
+      ? String(lead.packageId)
+      : null;
   let amount = 0;
   let packageName = lead.venuePackageName || "Selected Package";
 
   if (packageId) {
-    let pkg: any = null;
-
     // 1. Try VendorPackageModel by ID
-    pkg = await VendorPackageModel.findById(packageId);
+    let pkg: {
+      price?: number | null;
+      basePrice?: number | null;
+      title?: string | null;
+      packageName?: string | null;
+    } | null = await VendorPackageModel.findById(packageId);
 
     // 2. Try VenueOwner subdocument by ID
     if (!pkg && lead.venueOwnerId) {
@@ -112,8 +121,8 @@ async function resolvePackagePriceAndName(
             (p) =>
               p.isActive !== false &&
               new RegExp("^" + escapeRegExp(String(p.packageName || "").trim()) + "$", "i").test(
-                cleanName
-              )
+                cleanName,
+              ),
           );
           if (subPkg) {
             pkg = subPkg;
@@ -144,10 +153,10 @@ async function resolvePackagePriceAndName(
 }
 
 async function processLeadAcceptance(
-  lead: any,
+  lead: LeadDocument,
   ipAddress: string,
   userAgent: string,
-  logReason: string
+  logReason: string,
 ) {
   const leadIdStr = String(lead._id);
   const vendorId = lead.vendorId ? String(lead.vendorId) : null;
@@ -160,9 +169,15 @@ async function processLeadAcceptance(
   }
 
   // Create booking from lead data
-  const customerName = String(lead.customerName || "").trim() || extractFromMessage(String(lead.message || ""), "customer");
-  const customerMobile = normalizeMobile(String(lead.customerMobile || "")) || normalizeMobile(extractFromMessage(String(lead.message || ""), "mobile"));
-  const customerEmail = String(lead.customerEmail || "").trim() || extractFromMessage(String(lead.message || ""), "email");
+  const customerName =
+    String(lead.customerName || "").trim() ||
+    extractFromMessage(String(lead.message || ""), "customer");
+  const customerMobile =
+    normalizeMobile(String(lead.customerMobile || "")) ||
+    normalizeMobile(extractFromMessage(String(lead.message || ""), "mobile"));
+  const customerEmail =
+    String(lead.customerEmail || "").trim() ||
+    extractFromMessage(String(lead.message || ""), "email");
 
   // Resolve package details using the helper function
   const resolvedPkg = await resolvePackagePriceAndName(lead, vendorId);
@@ -242,7 +257,10 @@ async function processLeadAcceptance(
           eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
         });
       } catch (err) {
-        logger.warn({ error: err, bookingId: booking._id }, "Failed to send booking confirmation whatsapp via magic link");
+        logger.warn(
+          { error: err, bookingId: booking._id },
+          "Failed to send booking confirmation whatsapp via magic link",
+        );
       }
     });
   }
@@ -251,10 +269,10 @@ async function processLeadAcceptance(
 }
 
 async function processLeadRejection(
-  lead: any,
+  lead: LeadDocument,
   ipAddress: string,
   userAgent: string,
-  logReason: string
+  logReason: string,
 ) {
   const leadIdStr = String(lead._id);
   const vendorId = lead.vendorId ? String(lead.vendorId) : null;
@@ -334,7 +352,12 @@ export const vendorLeadActionService = {
       throw new ApiError(400, "TOKEN_EXPIRED");
     }
 
-    return processLeadAcceptance(lead, ipAddress, userAgent, "Lead booked successfully via magic link");
+    return processLeadAcceptance(
+      lead,
+      ipAddress,
+      userAgent,
+      "Lead booked successfully via magic link",
+    );
   },
 
   rejectLead: async (token: string, ipAddress: string, userAgent: string) => {
@@ -380,7 +403,12 @@ export const vendorLeadActionService = {
       throw new ApiError(400, "TOKEN_EXPIRED");
     }
 
-    return processLeadRejection(lead, ipAddress, userAgent, "Lead rejected successfully via magic link");
+    return processLeadRejection(
+      lead,
+      ipAddress,
+      userAgent,
+      "Lead rejected successfully via magic link",
+    );
   },
 
   getLeadAndPackagesForReview: async (token: string) => {
@@ -409,11 +437,7 @@ export const vendorLeadActionService = {
     return { lead, packages };
   },
 
-  acceptLeadWithReviewToken: async (
-    token: string,
-    ipAddress: string,
-    userAgent: string
-  ) => {
+  acceptLeadWithReviewToken: async (token: string, ipAddress: string, userAgent: string) => {
     const lead = await leadRepository.findByReviewToken(token);
 
     if (!lead) {
@@ -451,7 +475,12 @@ export const vendorLeadActionService = {
       throw new ApiError(400, "TOKEN_EXPIRED");
     }
 
-    return processLeadAcceptance(lead, ipAddress, userAgent, "Lead booked successfully via single review magic link");
+    return processLeadAcceptance(
+      lead,
+      ipAddress,
+      userAgent,
+      "Lead booked successfully via single review magic link",
+    );
   },
 
   rejectLeadWithReviewToken: async (token: string, ipAddress: string, userAgent: string) => {
@@ -492,6 +521,11 @@ export const vendorLeadActionService = {
       throw new ApiError(400, "TOKEN_EXPIRED");
     }
 
-    return processLeadRejection(lead, ipAddress, userAgent, "Lead rejected successfully via single review magic link");
+    return processLeadRejection(
+      lead,
+      ipAddress,
+      userAgent,
+      "Lead rejected successfully via single review magic link",
+    );
   },
 };

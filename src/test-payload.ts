@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { createVenueOwnerSchema } from "./validators/venue-owner.validator";
 
 const payload = {

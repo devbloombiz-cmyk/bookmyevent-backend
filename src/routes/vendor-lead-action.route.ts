@@ -7,19 +7,10 @@ const vendorLeadActionRouter = Router();
 
 const tokenParamSchema = z.object({
   params: z.object({
-    token: z.string().length(64).regex(/^[a-f0-9]+$/i, "Invalid token format"),
-  }),
-});
-
-const acceptReviewSchema = z.object({
-  params: z.object({
-    token: z.string().length(64).regex(/^[a-f0-9]+$/i, "Invalid token format"),
-  }),
-  body: z.object({
-    packageId: z.string().min(1, "Package ID is required"),
-    packageName: z.string().optional(),
-    quoteAmount: z.number().positive("Quote amount must be positive"),
-    advanceAmount: z.number().positive("Advance amount must be positive"),
+    token: z
+      .string()
+      .length(64)
+      .regex(/^[a-f0-9]+$/i, "Invalid token format"),
   }),
 });
 

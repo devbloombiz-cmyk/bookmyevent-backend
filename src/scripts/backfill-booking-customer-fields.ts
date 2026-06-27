@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import mongoose from "mongoose";
 import { env } from "../config/env";
 
@@ -17,7 +18,9 @@ function extractField(message: string, label: string) {
   for (const candidate of candidates) {
     const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const regex = new RegExp(`(?:^|\\n)\\s*${escaped}\\s*:\\s*([^\\n\\r]+)`, "i");
-    const value = String(message || "").match(regex)?.[1]?.trim();
+    const value = String(message || "")
+      .match(regex)?.[1]
+      ?.trim();
     if (value) {
       return value;
     }

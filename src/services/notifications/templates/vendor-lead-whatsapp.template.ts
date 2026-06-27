@@ -7,6 +7,7 @@ type VendorLeadWhatsappTemplatePayload = {
   eventSlot: string;
   eventTime?: string;
   eventType?: string;
+  packageName?: string;
   location: string;
   customerName: string;
   customerMobile: string;
@@ -33,15 +34,15 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
       `Event Date: ${payload.eventDate}`,
       "",
       `Slot: ${payload.eventSlot}`,
+      "",
+      `Selected Package: ${payload.packageName || "Not specified"}`,
+      "",
+      `Event Type: ${payload.eventType || "Not specified"}`,
+      "",
+      `Function Date: ${payload.eventDate}`,
+      "",
+      `Function Time: ${payload.eventTime || payload.eventSlot || "Not specified"}`,
     ];
-
-    if (payload.eventTime) {
-      lines.push("", `Event Time: ${payload.eventTime}`);
-    }
-
-    if (payload.eventType) {
-      lines.push("", `Event Type: ${payload.eventType}`);
-    }
 
     lines.push(
       "",
@@ -66,7 +67,7 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
       "",
       "━━━━━━━━━━━━━━━━━━",
       "",
-      "This link is secure, valid for 48 hours, and can only be used once."
+      "This link is secure, valid for 48 hours, and can only be used once.",
     );
 
     return lines.join("\n");
@@ -80,15 +81,11 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
     `Lead ID: ${payload.leadId}`,
     `Event Date: ${payload.eventDate}`,
     `Slot: ${payload.eventSlot}`,
+    `Selected Package: ${payload.packageName || "Not specified"}`,
+    `Event Type: ${payload.eventType || "Not specified"}`,
+    `Function Date: ${payload.eventDate}`,
+    `Function Time: ${payload.eventTime || payload.eventSlot || "Not specified"}`,
   ];
-
-  if (payload.eventTime) {
-    lines.push(`Event Time: ${payload.eventTime}`);
-  }
-
-  if (payload.eventType) {
-    lines.push(`Event Type: ${payload.eventType}`);
-  }
 
   lines.push(
     `Location: ${payload.location}`,

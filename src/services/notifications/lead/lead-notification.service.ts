@@ -31,16 +31,28 @@ function extractFromMessage(message: string | undefined, label: string) {
 
   const aliases: Record<string, string[]> = {
     customer: ["Customer Name", "Name", "Customer"],
-    mobile: ["Mobile Number", "Contact", "Contact Number", "Phone", "Phone Number", "WhatsApp", "Customer mobile"],
+    mobile: [
+      "Mobile Number",
+      "Contact",
+      "Contact Number",
+      "Phone",
+      "Phone Number",
+      "WhatsApp",
+      "Customer mobile",
+    ],
     email: ["Email Address", "Mail", "Customer email"],
     time: ["Function time", "Event Time", "Time"],
     type: ["Event type", "Type"],
+    package: ["Selected Package", "Package"],
   };
 
   const normalizedKey = label.trim().toLowerCase();
   const candidates = [label, ...(aliases[normalizedKey] || [])];
   for (const candidate of candidates) {
-    const regex = new RegExp(`(?:^|\\n)\\s*${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*([^\\n\\r]+)`, "i");
+    const regex = new RegExp(
+      `(?:^|\\n)\\s*${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:\\s*([^\\n\\r]+)`,
+      "i",
+    );
     const value = message.match(regex)?.[1]?.trim();
     if (value) {
       return value;
@@ -92,16 +104,21 @@ export const leadNotificationService = {
 
       const vendorName = vendor?.businessName?.trim() || vendor?.ownerName?.trim() || "Vendor";
       const customerName = lead?.customerName?.trim() || customer?.name?.trim() || "Customer";
-      const customerMobile = lead?.customerMobile?.trim() || customer?.mobile?.trim() || "Not provided";
+      const customerMobile =
+        lead?.customerMobile?.trim() || customer?.mobile?.trim() || "Not provided";
       const customerEmail = lead?.customerEmail?.trim() || customer?.email?.trim();
 
       // format Lead ID display to be like: LEAD-2026-000124 (last 6 hex uppercase)
-      const year = lead?.createdAt ? new Date(lead.createdAt).getFullYear() : new Date().getFullYear();
+      const year = lead?.createdAt
+        ? new Date(lead.createdAt).getFullYear()
+        : new Date().getFullYear();
       const shortId = payload.leadId.slice(-6).toUpperCase();
       const leadIdDisplay = `LEAD-${year}-${shortId}`;
 
       const eventTime = extractFromMessage(lead?.message || "", "time");
       const eventType = extractFromMessage(lead?.message || "", "type");
+      const packageName =
+        lead?.venuePackageName || extractFromMessage(lead?.message || "", "package");
 
       const message = buildVendorLeadWhatsappMessage({
         vendorName,
@@ -110,6 +127,7 @@ export const leadNotificationService = {
         eventSlot: payload.eventSlot?.trim() || "Full Day",
         eventTime: eventTime || undefined,
         eventType: eventType || undefined,
+        packageName: packageName || undefined,
         location: payload.location.trim(),
         customerName,
         customerMobile,
@@ -165,7 +183,10 @@ export const leadNotificationService = {
       const customerMobile = lead.customerMobile?.trim();
 
       if (!customerMobile) {
-        logger.warn({ event: "customer.lead_accepted.whatsapp.skipped", reason: "missing_mobile", leadId }, "Customer WhatsApp alert skipped: missing mobile number");
+        logger.warn(
+          { event: "customer.lead_accepted.whatsapp.skipped", reason: "missing_mobile", leadId },
+          "Customer WhatsApp alert skipped: missing mobile number",
+        );
         return;
       }
 
@@ -224,7 +245,10 @@ export const leadNotificationService = {
       const customerMobile = lead.customerMobile?.trim();
 
       if (!customerMobile) {
-        logger.warn({ event: "customer.lead_rejected.whatsapp.skipped", reason: "missing_mobile", leadId }, "Customer WhatsApp alert skipped: missing mobile number");
+        logger.warn(
+          { event: "customer.lead_rejected.whatsapp.skipped", reason: "missing_mobile", leadId },
+          "Customer WhatsApp alert skipped: missing mobile number",
+        );
         return;
       }
 

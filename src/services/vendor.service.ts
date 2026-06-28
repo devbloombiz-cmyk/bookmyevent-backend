@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { vendorRepository } from "../repositories/vendor.repository";
 import { userRepository } from "../repositories/user.repository";
+import { venueOwnerRepository } from "../repositories/venue-owner.repository";
 import { hashPassword } from "../utils/password";
 import { ApiError } from "../utils/api-error";
 import { galleryService } from "./gallery.service";
@@ -736,19 +737,25 @@ export const vendorService = {
       throw new ApiError(404, "Vendor not found");
     }
 
-    if (vendor.profileType === "venue_owner_shadow") {
-      throw new ApiError(404, "Vendor not found");
-    }
-
-    if (!includeInactive && (!vendor.isActive || vendor.approvalStatus !== "active")) {
-      throw new ApiError(404, "Vendor not found");
-    }
-
     const activeProRows = await subscriptionRepository.findActiveProByActorIds("vendor", [
       vendorId,
     ]);
     const isSubscribedPro = activeProRows.length > 0;
     const row = withBackwardCompatibleSubCategories(vendor.toObject() as Record<string, unknown>);
+
+    if (vendor.profileType === "venue_owner_shadow") {
+      const venueOwner = await venueOwnerRepository.findByLinkedVendorId(vendorId);
+      return {
+        ...row,
+        isSubscribedPro,
+        isVerified: Boolean(row.isVerified) || isSubscribedPro,
+        linkedVenueOwnerId: venueOwner ? String(venueOwner._id) : null,
+      };
+    }
+
+    if (!includeInactive && (!vendor.isActive || vendor.approvalStatus !== "active")) {
+      throw new ApiError(404, "Vendor not found");
+    }
 
     return {
       ...row,

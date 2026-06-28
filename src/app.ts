@@ -73,7 +73,7 @@ app.use(
         imgSrc: ["'self'", "data:", "https:"],
       },
     },
-  })
+  }),
 );
 app.use(
   cors({
@@ -111,7 +111,8 @@ app.use(
     skip: (req) =>
       req.path === "/api/v1/health" ||
       req.path === "/api/v1/auth/session" ||
-      req.path === "/api/v1/auth/refresh-token",
+      req.path === "/api/v1/auth/refresh-token" ||
+      (req.method === "GET" && req.path === "/api/v1/reviews/summary"),
     handler: (req, res, _next, options) => {
       const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
       res.setHeader("Retry-After", String(retryAfterSeconds));

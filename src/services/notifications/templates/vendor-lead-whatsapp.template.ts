@@ -27,7 +27,7 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
     const lines = [
       `Hello ${payload.vendorName},`,
       "",
-      "New Lead Enquiry Received",
+      "New booking Enquiry Received",
       "",
       `Lead ID: ${payload.leadId}`,
       "",
@@ -39,9 +39,7 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
       "",
       `Event Type: ${payload.eventType || "Not specified"}`,
       "",
-      `Function Date: ${payload.eventDate}`,
-      "",
-      `Function Time: ${payload.eventTime || payload.eventSlot || "Not specified"}`,
+      `Event Time: ${payload.eventTime || "Not specified"}`,
     ];
 
     lines.push(

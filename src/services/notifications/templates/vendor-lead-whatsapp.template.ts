@@ -8,6 +8,8 @@ type VendorLeadWhatsappTemplatePayload = {
   eventTime?: string;
   eventType?: string;
   packageName?: string;
+  packageStartTime?: string;
+  packageEndTime?: string;
   location: string;
   customerName: string;
   customerMobile: string;
@@ -38,9 +40,12 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
       `Selected Package: ${payload.packageName || "Not specified"}`,
       "",
       `Event Type: ${payload.eventType || "Not specified"}`,
-      "",
-      `Event Time: ${payload.eventTime || "Not specified"}`,
     ];
+
+    lines.push(
+      "",
+      `Event Time: ${payload.eventTime || (payload.packageStartTime && payload.packageEndTime ? `${payload.packageStartTime} - ${payload.packageEndTime}` : "Not specified")}`,
+    );
 
     lines.push(
       "",
@@ -80,10 +85,20 @@ export function buildVendorLeadWhatsappMessage(payload: VendorLeadWhatsappTempla
     `Event Date: ${payload.eventDate}`,
     `Slot: ${payload.eventSlot}`,
     `Selected Package: ${payload.packageName || "Not specified"}`,
+  ];
+
+  if (payload.packageStartTime) {
+    lines.push(`Package Start Time: ${payload.packageStartTime}`);
+  }
+  if (payload.packageEndTime) {
+    lines.push(`Package End Time: ${payload.packageEndTime}`);
+  }
+
+  lines.push(
     `Event Type: ${payload.eventType || "Not specified"}`,
     `Function Date: ${payload.eventDate}`,
     `Function Time: ${payload.eventTime || payload.eventSlot || "Not specified"}`,
-  ];
+  );
 
   lines.push(
     `Location: ${payload.location}`,

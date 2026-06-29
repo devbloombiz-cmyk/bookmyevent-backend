@@ -3,6 +3,7 @@ import { logger } from "../../../config/logger";
 import { userRepository } from "../../../repositories/user.repository";
 import { vendorRepository } from "../../../repositories/vendor.repository";
 import { leadRepository } from "../../../repositories/lead.repository";
+import { venueOwnerRepository } from "../../../repositories/venue-owner.repository";
 import { buildVendorLeadWhatsappMessage } from "../templates/vendor-lead-whatsapp.template";
 import { ultramsgWhatsappService } from "../whatsapp/ultramsg-whatsapp.service";
 
@@ -120,6 +121,34 @@ export const leadNotificationService = {
       const packageName =
         lead?.venuePackageName || extractFromMessage(lead?.message || "", "package");
 
+      let packageStartTime: string | undefined;
+      let packageEndTime: string | undefined;
+
+      if (lead?.venueOwnerId && lead?.packageId) {
+        try {
+          const venueOwner = await venueOwnerRepository.findById(String(lead.venueOwnerId));
+          if (venueOwner && Array.isArray(venueOwner.venuePackages)) {
+            const pkg = venueOwner.venuePackages.find(
+              (p: { _id?: unknown; venueStartTime?: string; venueEndTime?: string }) =>
+                String(p._id) === String(lead.packageId),
+            );
+            if (pkg) {
+              if (pkg.venueStartTime) {
+                packageStartTime = String(pkg.venueStartTime);
+              }
+              if (pkg.venueEndTime) {
+                packageEndTime = String(pkg.venueEndTime);
+              }
+            }
+          }
+        } catch (err) {
+          logger.warn(
+            { error: err, leadId: payload.leadId, venueOwnerId: lead.venueOwnerId },
+            "Failed to fetch venue owner or package details for WhatsApp lead notification",
+          );
+        }
+      }
+
       const message = buildVendorLeadWhatsappMessage({
         vendorName,
         leadId: leadIdDisplay,
@@ -128,6 +157,8 @@ export const leadNotificationService = {
         eventTime: eventTime || undefined,
         eventType: eventType || undefined,
         packageName: packageName || undefined,
+        packageStartTime,
+        packageEndTime,
         location: payload.location.trim(),
         customerName,
         customerMobile,

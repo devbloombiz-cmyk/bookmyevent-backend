@@ -353,6 +353,77 @@ export function renderLeadReviewPage(lead: ReviewLeadInput): string {
       font-weight: 600;
       margin-top: 24px;
     }
+
+    /* Custom Confirm Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-card {
+      background: rgba(30, 41, 59, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 30px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .modal-overlay.active .modal-card {
+      transform: scale(1);
+    }
+    .modal-card h3 {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      color: var(--color-text);
+    }
+    .modal-card p {
+      font-size: 14.5px;
+      color: var(--color-muted);
+      margin: 0 0 24px 0;
+      line-height: 1.5;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 24px;
+    }
+    .modal-actions button {
+      flex: 1;
+      padding: 12px;
+      font-size: 14.5px;
+      border-radius: 10px;
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--color-text);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -431,12 +502,91 @@ export function renderLeadReviewPage(lead: ReviewLeadInput): string {
     </div>
   </div>
 
+  <!-- Custom Confirmation Modal -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal-card">
+      <h3 id="modalTitle">Confirm Action</h3>
+      <p id="modalDescription">Are you sure you want to proceed?</p>
+      <div class="modal-actions">
+        <button id="modalCancelBtn" class="btn btn-secondary">Cancel</button>
+        <button id="modalConfirmBtn" class="btn btn-primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const approveBtn = document.getElementById('approveBtn');
     const rejectBtn = document.getElementById('rejectBtn');
 
+    const confirmModal = document.getElementById('confirmModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalDescription = document.getElementById('modalDescription');
+    const modalCancelBtn = document.getElementById('modalCancelBtn');
+    const modalConfirmBtn = document.getElementById('modalConfirmBtn');
+
+    let modalResolve = null;
+
+    function showConfirmModal(title, message, confirmText = 'Confirm', isDanger = false) {
+      modalTitle.innerText = title;
+      modalDescription.innerText = message;
+      modalConfirmBtn.innerText = confirmText;
+      modalCancelBtn.style.display = 'inline-flex';
+
+      if (isDanger) {
+        modalConfirmBtn.className = 'btn btn-primary';
+        modalConfirmBtn.style.background = 'var(--color-error)';
+      } else {
+        modalConfirmBtn.className = 'btn btn-primary';
+        modalConfirmBtn.style.background = 'var(--color-primary)';
+      }
+
+      confirmModal.classList.add('active');
+
+      return new Promise((resolve) => {
+        modalResolve = resolve;
+      });
+    }
+
+    function showCustomAlert(title, message) {
+      modalTitle.innerText = title;
+      modalDescription.innerText = message;
+      modalConfirmBtn.innerText = 'OK';
+      modalConfirmBtn.className = 'btn btn-primary';
+      modalConfirmBtn.style.background = 'var(--color-primary)';
+      modalCancelBtn.style.display = 'none';
+
+      confirmModal.classList.add('active');
+
+      return new Promise((resolve) => {
+        modalResolve = resolve;
+      });
+    }
+
+    modalConfirmBtn.addEventListener('click', () => {
+      confirmModal.classList.remove('active');
+      if (modalResolve) modalResolve(true);
+    });
+
+    modalCancelBtn.addEventListener('click', () => {
+      confirmModal.classList.remove('active');
+      if (modalResolve) modalResolve(false);
+    });
+
+    confirmModal.addEventListener('click', (e) => {
+      if (e.target === confirmModal) {
+        confirmModal.classList.remove('active');
+        if (modalResolve) modalResolve(false);
+      }
+    });
+
     approveBtn.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to accept this lead request?')) {
+      const confirmed = await showConfirmModal(
+        'Confirm Booking',
+        'Are you sure you want to accept this lead request and confirm the booking?',
+        'Confirm Booking',
+        false
+      );
+      if (!confirmed) {
         return;
       }
 
@@ -462,7 +612,7 @@ export function renderLeadReviewPage(lead: ReviewLeadInput): string {
         document.write(html);
         document.close();
       } catch (err) {
-        alert('An error occurred during submission. Please try again.');
+        await showCustomAlert('Error', 'An error occurred during submission. Please try again.');
         approveBtn.disabled = false;
         rejectBtn.disabled = false;
         approveBtn.innerText = 'Confirm Booking';
@@ -470,7 +620,13 @@ export function renderLeadReviewPage(lead: ReviewLeadInput): string {
     });
 
     rejectBtn.addEventListener('click', async () => {
-      if (!confirm('Are you sure you want to reject/cancel this lead?')) {
+      const confirmed = await showConfirmModal(
+        'Cancel Lead',
+        'Are you sure you want to reject/cancel this lead?',
+        'Cancel Lead',
+        true
+      );
+      if (!confirmed) {
         return;
       }
 
@@ -496,7 +652,7 @@ export function renderLeadReviewPage(lead: ReviewLeadInput): string {
         document.write(html);
         document.close();
       } catch (err) {
-        alert('An error occurred during rejection. Please try again.');
+        await showCustomAlert('Error', 'An error occurred during rejection. Please try again.');
         approveBtn.disabled = false;
         rejectBtn.disabled = false;
         rejectBtn.innerText = 'Cancel Lead';

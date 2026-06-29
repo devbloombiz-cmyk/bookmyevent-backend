@@ -135,25 +135,6 @@ export const packageService = {
         ? "venue_owner"
         : "vendor";
 
-      if (actorRole === "vendor") {
-        const subscriptionOverview = await subscriptionService.getMySubscriptionOverview({
-          id: authUser.id,
-          role: "vendor",
-        });
-
-        const hasActivePaidSubscription =
-          String(subscriptionOverview.planCode || "").toUpperCase() !== "FREE" &&
-          subscriptionOverview.subscription?.status === "active" &&
-          subscriptionOverview.subscription?.paymentStatus === "confirmed";
-
-        if (!hasActivePaidSubscription) {
-          throw new ApiError(
-            403,
-            "Active paid subscription is required to create packages. Please upgrade and complete payment first.",
-          );
-        }
-      }
-
       const venueOwnerId = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
         ? await resolveVenueOwnerIdForAuthUser(authUser)
         : undefined;

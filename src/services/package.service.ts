@@ -126,8 +126,9 @@ export const packageService = {
     const normalizedPayload = normalizeVendorPackagePayload(payload);
 
     const hasOwnScope =
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+      !authUser.permissions.includes(PermissionKeys.PackagePlatformManage) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn));
 
     if (authUser.permissions.includes(PermissionKeys.PackageVendorCreateOwn) && hasOwnScope) {
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);
@@ -171,6 +172,8 @@ export const packageService = {
   ) => {
     if (
       authUser &&
+      !authUser.permissions.includes(PermissionKeys.PackagePlatformManage) &&
+      !authUser.permissions.includes(PermissionKeys.PackagePlatformRead) &&
       (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
         authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
     ) {
@@ -237,8 +240,9 @@ export const packageService = {
     }
 
     const hasOwnScope =
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+      !authUser.permissions.includes(PermissionKeys.PackagePlatformManage) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn));
 
     if (authUser.permissions.includes(PermissionKeys.PackageVendorUpdateOwn) && hasOwnScope) {
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);
@@ -306,8 +310,9 @@ export const packageService = {
     }
 
     const hasOwnScope =
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+      !authUser.permissions.includes(PermissionKeys.PackagePlatformManage) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn));
 
     if (authUser.permissions.includes(PermissionKeys.PackageVendorDeleteOwn) && hasOwnScope) {
       const ownVendorId = await resolveVendorIdForScopedUser(authUser);

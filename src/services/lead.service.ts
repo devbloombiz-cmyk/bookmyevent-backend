@@ -142,8 +142,9 @@ async function trySendLeadCancelledWhatsapp(payload: {
 
 async function resolveVendorIdForLead(authUser: AuthUser, requestedVendorId?: string) {
   if (
-    authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-    authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    !authUser.permissions.includes(PermissionKeys.LeadUpdateAny) &&
+    (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
   ) {
     return resolveVendorIdForScopedUser(authUser);
   }
@@ -161,8 +162,12 @@ function normalizeReferralCode(rawValue: unknown) {
 
 export const leadService = {
   createLead: async (payload: Record<string, unknown>, authUser: AuthUser) => {
-    const isVenueOwnerScope = authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
-    const isVendorScope = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn);
+    const isVenueOwnerScope =
+      !authUser.permissions.includes(PermissionKeys.LeadUpdateAny) &&
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn);
+    const isVendorScope =
+      !authUser.permissions.includes(PermissionKeys.LeadUpdateAny) &&
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn);
     const vendorId = await resolveVendorIdForLead(authUser, payload.vendorId as string | undefined);
     if (!vendorId) {
       throw new ApiError(400, "vendorId is required");
@@ -278,6 +283,13 @@ export const leadService = {
   listLeads: async (authUser: AuthUser, filters: Record<string, unknown>) => {
     const requestedStatus = typeof filters.status === "string" ? filters.status : undefined;
 
+    if (authUser.permissions.includes(PermissionKeys.LeadReadAny)) {
+      if (typeof filters.vendorId === "string" && filters.vendorId) {
+        return leadRepository.findByVendor(filters.vendorId, requestedStatus);
+      }
+      return leadRepository.findAll({ status: requestedStatus });
+    }
+
     if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
       const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
       return leadRepository.findByVenueOwner(venueOwnerId, requestedStatus);
@@ -300,14 +312,20 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+    if (
+      !authUser.permissions.includes(PermissionKeys.LeadUpdateAny) &&
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
       const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
       if (String(existingLead.venueOwnerId || "") !== venueOwnerId) {
         throw new ApiError(403, "You are not allowed to update this lead");
       }
     }
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
+    if (
+      !authUser.permissions.includes(PermissionKeys.LeadUpdateAny) &&
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
+    ) {
       const vendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(existingLead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to update this lead");
@@ -373,14 +391,20 @@ export const leadService = {
       throw new ApiError(404, "Lead not found");
     }
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+    if (
+      !authUser.permissions.includes(PermissionKeys.LeadConvertAny) &&
+      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+    ) {
       const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
       if (String(lead.venueOwnerId || "") !== venueOwnerId) {
         throw new ApiError(403, "You are not allowed to convert this lead");
       }
     }
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
+    if (
+      !authUser.permissions.includes(PermissionKeys.LeadConvertAny) &&
+      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
+    ) {
       const vendorId = await resolveVendorIdForScopedUser(authUser);
       if (String(lead.vendorId) !== vendorId) {
         throw new ApiError(403, "You are not allowed to convert this lead");
@@ -454,7 +478,7 @@ export const leadService = {
 
     if (customerMobile) {
       const pkg = await packageRepository.findVendorPackageById(payload.packageId);
-      const packageName = pkg ? pkg.title : (lead.venuePackageName || "Selected Package");
+      const packageName = pkg ? pkg.title : lead.venuePackageName || "Selected Package";
       const vendorObj = await vendorRepository.findById(String(lead.vendorId));
       const vendorName = vendorObj?.businessName?.trim() || vendorObj?.ownerName?.trim() || "";
 
@@ -467,7 +491,10 @@ export const leadService = {
           vendorName,
           eventDate: lead.eventDate ? new Date(lead.eventDate) : undefined,
         }).catch((err) => {
-          logger.warn({ error: err, bookingId: booking._id }, "Failed to send booking confirmation whatsapp on direct conversion");
+          logger.warn(
+            { error: err, bookingId: booking._id },
+            "Failed to send booking confirmation whatsapp on direct conversion",
+          );
         });
       });
     }

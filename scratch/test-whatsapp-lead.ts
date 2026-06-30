@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { buildVendorLeadWhatsappMessage } from "../src/services/notifications/templates/vendor-lead-whatsapp.template";
 
 const payloadWithReviewToken = {

@@ -23,8 +23,7 @@ const personDetailSchema = z.object({
 
 export const createGuruvayoorRequestSchema = z.object({
   body: z.object({
-    eventDate: z
-      .coerce
+    eventDate: z.coerce
       .date()
       .refine(
         (value) => isAtLeastNoticeDaysAhead(value, MIN_BOOKING_NOTICE_DAYS),
@@ -56,6 +55,14 @@ export const updateGuruvayoorRequestSchema = z.object({
       summary: z.string().optional(),
     })
     .refine((payload) => Object.keys(payload).length > 0, "At least one field is required"),
+  query: z.object({}),
+  params: z.object({
+    requestId: z.string().min(1),
+  }),
+});
+
+export const deleteGuruvayoorRequestSchema = z.object({
+  body: z.object({}).optional().default({}),
   query: z.object({}),
   params: z.object({
     requestId: z.string().min(1),

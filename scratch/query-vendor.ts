@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { connectToDatabase } from "../src/config/database";
 import { vendorService } from "../src/services/vendor.service";
 import mongoose from "mongoose";

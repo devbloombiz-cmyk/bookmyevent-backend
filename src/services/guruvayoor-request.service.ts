@@ -12,4 +12,11 @@ export const guruvayoorRequestService = {
 
     return updated;
   },
+  deleteRequest: async (requestId: string) => {
+    const deleted = await guruvayoorRequestRepository.deleteById(requestId);
+    if (!deleted) {
+      throw new ApiError(404, "Guruvayoor request not found");
+    }
+    return deleted;
+  },
 };

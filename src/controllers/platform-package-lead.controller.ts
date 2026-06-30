@@ -17,4 +17,9 @@ export const platformPackageLeadController = {
     const lead = await platformPackageLeadService.updateLead(leadId, req.body);
     return sendSuccess(res, "Package enquiry updated", { lead });
   }),
+  deleteLead: asyncHandler(async (req, res) => {
+    const leadId = String(req.params.leadId);
+    const lead = await platformPackageLeadService.deleteLead(leadId);
+    return sendSuccess(res, "Package enquiry deleted", { lead });
+  }),
 };

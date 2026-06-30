@@ -168,6 +168,10 @@ async function filterBookingsByScopedOwnership(
   bookings: Array<Record<string, unknown>>,
   authUser: AuthUser,
 ) {
+  if (authUser.permissions.includes(PermissionKeys.BookingReadAny)) {
+    return bookings;
+  }
+
   const leadIds = bookings
     .map((item) => String(item.leadId || ""))
     .filter((value) => Boolean(value));
@@ -212,6 +216,13 @@ async function filterBookingsByScopedOwnership(
 }
 
 async function assertScopedBookingAccess(existing: Record<string, unknown>, authUser: AuthUser) {
+  if (
+    authUser.permissions.includes(PermissionKeys.BookingUpdateAny) ||
+    authUser.permissions.includes(PermissionKeys.BookingReadAny)
+  ) {
+    return;
+  }
+
   if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
     const venueOwnerId = await resolveVenueOwnerIdForAuthUser(authUser);
     const leadId = String(existing.leadId || "");
@@ -258,8 +269,9 @@ export const bookingService = {
 
     let targetVendorId = String(normalizedPayload["vendorId"] || "");
     if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+      !authUser.permissions.includes(PermissionKeys.BookingReadAny) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
     ) {
       targetVendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
         ? await resolveVendorIdForAuthUser(authUser)
@@ -284,8 +296,9 @@ export const bookingService = {
     let booking;
 
     if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+      !authUser.permissions.includes(PermissionKeys.BookingReadAny) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
     ) {
       booking = await bookingRepository.create({ ...normalizedPayload, vendorId: targetVendorId });
     } else {
@@ -323,7 +336,13 @@ export const bookingService = {
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
     let bookings;
 
-    if (authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)) {
+    if (authUser.permissions.includes(PermissionKeys.BookingReadAny)) {
+      if (typeof filters.vendorId === "string" && filters.vendorId) {
+        bookings = await bookingRepository.findByVendor(filters.vendorId);
+      } else {
+        bookings = await bookingRepository.findAll();
+      }
+    } else if (authUser.permissions.includes(PermissionKeys.ScopeCustomerOwn)) {
       bookings = await bookingRepository.findByCustomer(authUser.id);
     } else if (
       authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
@@ -333,10 +352,8 @@ export const bookingService = {
         ? await resolveVendorIdForAuthUser(authUser)
         : await resolveVendorIdForScopedUser(authUser);
       bookings = await bookingRepository.findByVendor(vendorId);
-    } else if (typeof filters.vendorId === "string" && filters.vendorId) {
-      bookings = await bookingRepository.findByVendor(filters.vendorId);
     } else {
-      bookings = await bookingRepository.findAll();
+      bookings = [];
     }
 
     bookings = await filterBookingsByScopedOwnership(
@@ -361,8 +378,10 @@ export const bookingService = {
     const oldVendorId = existing.vendorId;
 
     if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+      !authUser.permissions.includes(PermissionKeys.BookingUpdateAny) &&
+      !authUser.permissions.includes(PermissionKeys.BookingReadAny) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
     ) {
       const vendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
         ? await resolveVendorIdForAuthUser(authUser)
@@ -546,8 +565,9 @@ export const bookingService = {
     }
 
     if (
-      authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
-      authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)
+      !authUser.permissions.includes(PermissionKeys.BookingReadAny) &&
+      (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn) ||
+        authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn))
     ) {
       const vendorId = authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)
         ? await resolveVendorIdForAuthUser(authUser)

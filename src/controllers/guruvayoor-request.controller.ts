@@ -17,4 +17,9 @@ export const guruvayoorRequestController = {
     const request = await guruvayoorRequestService.updateRequest(requestId, req.body);
     return sendSuccess(res, "Guruvayoor request updated", { request });
   }),
+  deleteRequest: asyncHandler(async (req, res) => {
+    const requestId = String(req.params.requestId);
+    const request = await guruvayoorRequestService.deleteRequest(requestId);
+    return sendSuccess(res, "Guruvayoor request deleted", { request });
+  }),
 };

@@ -18,6 +18,7 @@ import {
   createPlatformPackageLeadSchema,
   listPlatformPackageLeadSchema,
   updatePlatformPackageLeadSchema,
+  deletePlatformPackageLeadSchema,
 } from "../validators/platform-package-lead.validator";
 
 const packageRouter = Router();
@@ -51,6 +52,13 @@ packageRouter.put(
   authorize(PermissionKeys.PackageLeadUpdate),
   validateRequest(updatePlatformPackageLeadSchema),
   platformPackageLeadController.updateLead,
+);
+packageRouter.delete(
+  "/platform-leads/:leadId",
+  requireAuth,
+  authorize(PermissionKeys.PackageLeadUpdate),
+  validateRequest(deletePlatformPackageLeadSchema),
+  platformPackageLeadController.deleteLead,
 );
 
 packageRouter.post(

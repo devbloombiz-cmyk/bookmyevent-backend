@@ -8,6 +8,7 @@ import {
   createGuruvayoorRequestSchema,
   listGuruvayoorRequestSchema,
   updateGuruvayoorRequestSchema,
+  deleteGuruvayoorRequestSchema,
 } from "../validators/guruvayoor-request.validator";
 
 const guruvayoorRequestRouter = Router();
@@ -30,6 +31,13 @@ guruvayoorRequestRouter.put(
   authorize(PermissionKeys.PackageLeadUpdate),
   validateRequest(updateGuruvayoorRequestSchema),
   guruvayoorRequestController.updateRequest,
+);
+guruvayoorRequestRouter.delete(
+  "/:requestId",
+  requireAuth,
+  authorize(PermissionKeys.PackageLeadUpdate),
+  validateRequest(deleteGuruvayoorRequestSchema),
+  guruvayoorRequestController.deleteRequest,
 );
 
 export { guruvayoorRequestRouter };

@@ -13,4 +13,5 @@ export const guruvayoorRequestRepository = {
   findById: (requestId: string) => GuruvayoorRequestModel.findById(requestId),
   updateById: (requestId: string, payload: Record<string, unknown>) =>
     GuruvayoorRequestModel.findByIdAndUpdate(requestId, payload, { returnDocument: "after" }),
+  deleteById: (requestId: string) => GuruvayoorRequestModel.findByIdAndDelete(requestId),
 };

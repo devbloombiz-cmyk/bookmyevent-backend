@@ -7,7 +7,10 @@ export const createPlatformPackageLeadSchema = z.object({
     packageId: z.string().min(24).max(24),
     name: z.string().min(2),
     mobile: z.string().min(8).max(20),
-    email: z.union([z.email(), z.literal("")]).optional().default(""),
+    email: z
+      .union([z.email(), z.literal("")])
+      .optional()
+      .default(""),
     eventDate: z.coerce.date().optional(),
     message: z.string().optional().default(""),
   }),
@@ -30,6 +33,14 @@ export const updatePlatformPackageLeadSchema = z.object({
       message: z.string().optional(),
     })
     .refine((payload) => Object.keys(payload).length > 0, "At least one field is required"),
+  query: z.object({}),
+  params: z.object({
+    leadId: z.string().min(1),
+  }),
+});
+
+export const deletePlatformPackageLeadSchema = z.object({
+  body: z.object({}).optional().default({}),
   query: z.object({}),
   params: z.object({
     leadId: z.string().min(1),

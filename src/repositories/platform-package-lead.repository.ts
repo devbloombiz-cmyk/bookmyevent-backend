@@ -12,4 +12,5 @@ export const platformPackageLeadRepository = {
   findById: (leadId: string) => PlatformPackageLeadModel.findById(leadId),
   updateById: (leadId: string, payload: Record<string, unknown>) =>
     PlatformPackageLeadModel.findByIdAndUpdate(leadId, payload, { returnDocument: "after" }),
+  deleteById: (leadId: string) => PlatformPackageLeadModel.findByIdAndDelete(leadId),
 };

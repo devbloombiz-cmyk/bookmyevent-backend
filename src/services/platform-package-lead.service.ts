@@ -36,4 +36,11 @@ export const platformPackageLeadService = {
 
     return updated;
   },
+  deleteLead: async (leadId: string) => {
+    const deleted = await platformPackageLeadRepository.deleteById(leadId);
+    if (!deleted) {
+      throw new ApiError(404, "Platform package lead not found");
+    }
+    return deleted;
+  },
 };

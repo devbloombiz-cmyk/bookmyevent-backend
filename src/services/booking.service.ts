@@ -334,7 +334,7 @@ export const bookingService = {
     return booking;
   },
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
-    let bookings;
+    let bookings: any[];
 
     if (authUser.permissions.includes(PermissionKeys.BookingReadAny)) {
       if (typeof filters.vendorId === "string" && filters.vendorId) {

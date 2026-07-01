@@ -107,7 +107,9 @@ export const reviewService = {
       throw new ApiError(409, "A review already exists for this booking");
     }
 
-    const subject = await resolveReviewSubjectFromBooking(booking.toObject() as Record<string, unknown>);
+    const subject = await resolveReviewSubjectFromBooking(
+      booking.toObject() as Record<string, unknown>,
+    );
 
     const review = await reviewRepository.create({
       bookingId: payload.bookingId,
@@ -129,7 +131,10 @@ export const reviewService = {
     return review;
   },
 
-  getBookingReviewContext: async (bookingId: string, authUser: AuthUser): Promise<ReviewContext> => {
+  getBookingReviewContext: async (
+    bookingId: string,
+    authUser: AuthUser,
+  ): Promise<ReviewContext> => {
     const booking = await bookingRepository.findById(bookingId);
     if (!booking) {
       throw new ApiError(404, "Booking not found");
@@ -139,7 +144,9 @@ export const reviewService = {
       throw new ApiError(403, "You are not allowed to access this booking");
     }
 
-    const subject = await resolveReviewSubjectFromBooking(booking.toObject() as Record<string, unknown>);
+    const subject = await resolveReviewSubjectFromBooking(
+      booking.toObject() as Record<string, unknown>,
+    );
     const existing = await reviewRepository.findByBookingId(bookingId);
 
     return {
@@ -227,5 +234,74 @@ export const reviewService = {
       total,
       totalPages: Math.max(1, Math.ceil(total / params.limit)),
     };
+  },
+
+  deleteReview: async (reviewId: string, authUser: AuthUser) => {
+    const review = await reviewRepository.findById(reviewId);
+    if (!review) {
+      throw new ApiError(404, "Review not found");
+    }
+
+    let isAuthorized = false;
+
+    if (authUser.permissions.includes(PermissionKeys.WorkspaceAdminAccess)) {
+      isAuthorized = true;
+    } else if (String(review.customerId) === authUser.id) {
+      isAuthorized = true;
+    } else if (authUser.permissions.includes(PermissionKeys.ScopeVenueOwnerOwn)) {
+      const vendorId = await resolveVendorIdForScopedUser(authUser);
+      const venue = await venueOwnerRepository.findByLinkedVendorId(vendorId);
+      if (
+        venue &&
+        String(review.subjectId) === String(venue._id) &&
+        review.subjectType === "venue_owner"
+      ) {
+        isAuthorized = true;
+      }
+    } else if (authUser.permissions.includes(PermissionKeys.ScopeVendorOwn)) {
+      const vendorId = await resolveVendorIdForScopedUser(authUser);
+      if (String(review.subjectId) === vendorId && review.subjectType === "vendor") {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      throw new ApiError(403, "You are not authorized to delete this review");
+    }
+
+    await reviewRepository.deleteById(reviewId);
+
+    // Sync rating for the subject
+    await syncSubjectRating(review.subjectType as SubjectType, String(review.subjectId));
+  },
+
+  updateReview: async (
+    reviewId: string,
+    payload: { rating: number; title: string; message: string },
+    authUser: AuthUser,
+  ) => {
+    const review = await reviewRepository.findById(reviewId);
+    if (!review) {
+      throw new ApiError(404, "Review not found");
+    }
+
+    if (String(review.customerId) !== authUser.id) {
+      throw new ApiError(403, "You are not authorized to update this review");
+    }
+
+    const updated = await reviewRepository.updateById(reviewId, {
+      rating: payload.rating,
+      title: payload.title,
+      message: payload.message,
+    });
+
+    if (!updated) {
+      throw new ApiError(500, "Failed to update review");
+    }
+
+    // Sync rating for the subject
+    await syncSubjectRating(updated.subjectType as SubjectType, String(updated.subjectId));
+
+    return updated;
   },
 };

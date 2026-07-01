@@ -47,7 +47,11 @@ export const reviewRepository = {
     return ReviewModel.countDocuments(query);
   },
   summarizeBySubject: async (subjectType: "vendor" | "venue_owner", subjectId: string) => {
-    const [row] = await ReviewModel.aggregate<{ _id: null; avgRating: number; totalReviews: number }>([
+    const [row] = await ReviewModel.aggregate<{
+      _id: null;
+      avgRating: number;
+      totalReviews: number;
+    }>([
       {
         $match: {
           subjectType,
@@ -151,4 +155,8 @@ export const reviewRepository = {
 
     return ReviewModel.countDocuments(query);
   },
+  findById: (id: string) => ReviewModel.findById(id),
+  deleteById: (id: string) => ReviewModel.findByIdAndDelete(id),
+  updateById: (id: string, payload: Record<string, unknown>) =>
+    ReviewModel.findByIdAndUpdate(id, payload, { returnDocument: "after" }),
 };

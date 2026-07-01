@@ -40,7 +40,10 @@ export const reviewController = {
 
   getSummary: asyncHandler(async (req, res) => {
     const { subjectType, subjectId } = req.query as Record<string, string>;
-    const summary = await reviewService.getSummary(subjectType as "vendor" | "venue_owner", subjectId);
+    const summary = await reviewService.getSummary(
+      subjectType as "vendor" | "venue_owner",
+      subjectId,
+    );
     return sendSuccess(res, "Review summary fetched", { summary });
   }),
 
@@ -59,5 +62,27 @@ export const reviewController = {
     });
 
     return sendSuccess(res, "Review dashboard fetched", data);
+  }),
+
+  deleteReview: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const reviewId = String(req.params.reviewId);
+    await reviewService.deleteReview(reviewId, authUser);
+    return sendSuccess(res, "Review deleted successfully", {});
+  }),
+
+  updateReview: asyncHandler(async (req, res) => {
+    const authUser = req.authUser;
+    if (!authUser) {
+      throw new ApiError(401, "Unauthorized");
+    }
+
+    const reviewId = String(req.params.reviewId);
+    const review = await reviewService.updateReview(reviewId, req.body, authUser);
+    return sendSuccess(res, "Review updated successfully", { review });
   }),
 };

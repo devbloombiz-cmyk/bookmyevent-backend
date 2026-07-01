@@ -52,3 +52,23 @@ export const reviewOwnerDashboardSchema = z.object({
   }),
   params: z.object({}).default({}),
 });
+
+export const reviewDeleteSchema = z.object({
+  body: z.object({}).default({}),
+  query: z.object({}).default({}),
+  params: z.object({
+    reviewId: z.string().min(24).max(24),
+  }),
+});
+
+export const reviewUpdateSchema = z.object({
+  body: z.object({
+    rating: z.number().int().min(1).max(5),
+    title: z.string().trim().min(3).max(120),
+    message: z.string().trim().min(10).max(2000),
+  }),
+  query: z.object({}).default({}),
+  params: z.object({
+    reviewId: z.string().min(24).max(24),
+  }),
+});

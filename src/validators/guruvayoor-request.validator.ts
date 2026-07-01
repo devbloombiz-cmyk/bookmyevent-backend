@@ -34,6 +34,7 @@ export const createGuruvayoorRequestSchema = z.object({
     brideDetails: personDetailSchema,
     addPhotographer: z.boolean().optional().default(false),
     guestCount: z.number().int().min(0).max(8),
+    contact: z.string().min(5),
     summary: z.string().optional().default(""),
   }),
   query: z.object({}),
@@ -53,6 +54,7 @@ export const updateGuruvayoorRequestSchema = z.object({
     .object({
       status: z.enum(["pending", "approved", "rejected"]).optional(),
       summary: z.string().optional(),
+      contact: z.string().optional(),
     })
     .refine((payload) => Object.keys(payload).length > 0, "At least one field is required"),
   query: z.object({}),

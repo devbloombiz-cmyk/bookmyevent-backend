@@ -18,11 +18,16 @@ const personDetailSchema = new Schema(
 const guruvayoorRequestSchema = new Schema(
   {
     eventDate: { type: Date, required: true },
-    timeSlot: { type: String, enum: ["05:00", "06:00", "07:00", "08:00", "09:00", "10:00"], required: true },
+    timeSlot: {
+      type: String,
+      enum: ["05:00", "06:00", "07:00", "08:00", "09:00", "10:00"],
+      required: true,
+    },
     groomDetails: { type: personDetailSchema, required: true },
     brideDetails: { type: personDetailSchema, required: true },
     addPhotographer: { type: Boolean, default: false },
     guestCount: { type: Number, required: true, min: 0, max: 8 },
+    contact: { type: String, required: true, trim: true },
     summary: { type: String, default: "", trim: true },
     status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
   },

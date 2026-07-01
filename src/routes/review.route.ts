@@ -8,9 +8,11 @@ import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   bookingReviewContextSchema,
   reviewCreateSchema,
+  reviewDeleteSchema,
   reviewOwnerDashboardSchema,
   reviewPublicListSchema,
   reviewSummarySchema,
+  reviewUpdateSchema,
 } from "../validators/review.validator";
 
 const reviewRouter = Router();
@@ -41,6 +43,27 @@ reviewRouter.get(
   authorize([PermissionKeys.WorkspaceVendorAccess, PermissionKeys.WorkspaceVenueOwnerAccess]),
   validateRequest(reviewOwnerDashboardSchema),
   reviewController.listOwnerDashboardReviews,
+);
+
+reviewRouter.put(
+  "/:reviewId",
+  requireAuth,
+  authorize(PermissionKeys.WorkspaceCustomerAccess),
+  validateRequest(reviewUpdateSchema),
+  reviewController.updateReview,
+);
+
+reviewRouter.delete(
+  "/:reviewId",
+  requireAuth,
+  authorize([
+    PermissionKeys.WorkspaceVendorAccess,
+    PermissionKeys.WorkspaceVenueOwnerAccess,
+    PermissionKeys.WorkspaceAdminAccess,
+    PermissionKeys.WorkspaceCustomerAccess,
+  ]),
+  validateRequest(reviewDeleteSchema),
+  reviewController.deleteReview,
 );
 
 export { reviewRouter };

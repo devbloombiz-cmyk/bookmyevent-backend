@@ -334,6 +334,7 @@ export const bookingService = {
     return booking;
   },
   listBookings: async (authUser: AuthUser, filters: Record<string, unknown>) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let bookings: any[];
 
     if (authUser.permissions.includes(PermissionKeys.BookingReadAny)) {

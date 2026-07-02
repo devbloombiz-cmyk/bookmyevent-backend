@@ -15,7 +15,6 @@ const blogSchema = new Schema(
   { timestamps: true },
 );
 
-blogSchema.index({ slug: 1 }, { unique: true });
 blogSchema.index({ isActive: 1, publishedAt: -1 });
 blogSchema.index({ isFeatured: 1, publishedAt: -1 });
 blogSchema.index({ title: "text", excerpt: "text", content: "text" });

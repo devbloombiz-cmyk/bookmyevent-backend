@@ -21,7 +21,6 @@ const reviewSchema = new Schema(
 
 reviewSchema.index({ subjectType: 1, subjectId: 1, createdAt: -1 });
 reviewSchema.index({ customerId: 1, createdAt: -1 });
-reviewSchema.index({ bookingId: 1 }, { unique: true });
 reviewSchema.index({ rating: 1 });
 
 export const ReviewModel = model("Review", reviewSchema);

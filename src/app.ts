@@ -1,13 +1,13 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import pinoHttp from "pino-http";
 import { createHash } from "node:crypto";
 import { env } from "./config/env";
-import { logger } from "./config/logger";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { enforceJsonRequests, sanitizeRequestMiddleware } from "./middlewares/sanitize.middleware";
+import { traceMiddleware } from "./middlewares/trace.middleware";
 import { apiV1Router } from "./routes";
 import { webhookRouter } from "./routes/webhook.route";
 import { vendorLeadActionRouter } from "./routes/vendor-lead-action.route";
@@ -56,11 +56,7 @@ function buildRateLimitKey(req: express.Request): string {
   return `ip:${hashIdentity(`${req.ip}:${userAgent}`)}`;
 }
 
-app.use(
-  pinoHttp({
-    logger,
-  }),
-);
+app.use(traceMiddleware as any);
 
 app.use(
   helmet({
@@ -73,7 +69,7 @@ app.use(
         imgSrc: ["'self'", "data:", "https:"],
       },
     },
-  }),
+  }) as any,
 );
 app.use(
   cors({
@@ -98,7 +94,7 @@ app.use(
       callback(new Error("CORS origin is not allowed"));
     },
     credentials: true,
-  }),
+  }) as any,
 );
 
 app.use(
@@ -124,7 +120,7 @@ app.use(
         },
       });
     },
-  }),
+  }) as any,
 );
 
 app.use("/api/v1", (_req, res, next) => {
@@ -136,12 +132,15 @@ app.use("/api/v1", (_req, res, next) => {
 });
 
 // Razorpay webhook signature validation requires exact raw request bytes.
-app.use("/api/v1/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }));
-app.use("/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }));
-app.use("/webhooks", webhookRouter);
+app.use(
+  "/api/v1/webhooks/razorpay",
+  express.raw({ type: "application/json", limit: "2mb" }) as any,
+);
+app.use("/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }) as any);
+app.use("/webhooks", webhookRouter as any);
 
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "2mb" }) as any);
+app.use(express.urlencoded({ extended: true }) as any);
 app.use(enforceJsonRequests);
 app.use(sanitizeRequestMiddleware);
 

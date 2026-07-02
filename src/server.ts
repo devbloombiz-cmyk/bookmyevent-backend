@@ -61,6 +61,9 @@ async function bootstrap() {
 
   app.listen(env.PORT, () => {
     logger.info(`BookMyEvent API running on port ${env.PORT}`);
+    if (process.send) {
+      process.send("ready");
+    }
   });
 }
 

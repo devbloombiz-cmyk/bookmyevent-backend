@@ -1,4 +1,4 @@
-import type { Request, Response, NextFunction } from "express";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { randomUUID } from "node:crypto";
 import { accessLogger } from "../config/logger";
 import { trackRequestStart, trackRequestEnd } from "../utils/metrics";

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import pino from "pino";
 import fs from "fs";
 import path from "path";
@@ -37,7 +38,7 @@ export const logger = pino(
   {
     level: process.env.LOG_LEVEL ?? "info",
   },
-  pino.multistream(mainStreams)
+  pino.multistream(mainStreams),
 );
 
 // Access logger for HTTP request metrics
@@ -51,7 +52,7 @@ export const accessLogger = pino(
       stream: fs.createWriteStream(path.join(logDir, "access.log"), { flags: "a" }),
     },
     ...(isDevelopment ? [{ level: "info" as const, stream: devConsoleStream }] : []),
-  ])
+  ]),
 );
 
 // MongoDB logger for connection and query diagnostics
@@ -65,5 +66,5 @@ export const mongoLogger = pino(
       stream: fs.createWriteStream(path.join(logDir, "mongodb.log"), { flags: "a" }),
     },
     ...(isDevelopment ? [{ level: "info" as const, stream: devConsoleStream }] : []),
-  ])
+  ]),
 );

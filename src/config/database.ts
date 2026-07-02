@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from "mongoose";
 import { env } from "./env";
 import { mongoLogger } from "./logger";
@@ -31,11 +32,11 @@ export async function connectToDatabase() {
   // Enable global query performance logging
   mongoose.plugin((schema) => {
     // Hook for standard query methods
-    schema.pre(/^find|^count|^update|^delete/, function(this: any) {
+    schema.pre(/^find|^count|^update|^delete/, function (this: any) {
       this._startTime = process.hrtime();
     });
 
-    schema.post(/^find|^count|^update|^delete/, function(this: any, res: any) {
+    schema.post(/^find|^count|^update|^delete/, function (this: any, res: any) {
       void res;
       if (this._startTime) {
         const diff = process.hrtime(this._startTime);
@@ -58,11 +59,11 @@ export async function connectToDatabase() {
     });
 
     // Hook for aggregation pipelines
-    schema.pre("aggregate", function(this: any) {
+    schema.pre("aggregate", function (this: any) {
       this._startTime = process.hrtime();
     });
 
-    schema.post("aggregate", function(this: any, res: any) {
+    schema.post("aggregate", function (this: any, res: any) {
       void res;
       if (this._startTime) {
         const diff = process.hrtime(this._startTime);
@@ -70,7 +71,8 @@ export async function connectToDatabase() {
         let modelName = "Unknown";
         try {
           if (this.model) {
-            modelName = typeof this.model === "function" ? this.model().modelName : this.model.modelName;
+            modelName =
+              typeof this.model === "function" ? this.model().modelName : this.model.modelName;
           }
         } catch {
           // Fallback if model() call fails
@@ -82,9 +84,15 @@ export async function connectToDatabase() {
         };
 
         if (durationMs > 500) {
-          mongoLogger.warn(pipelineInfo, `SLOW MONGO AGGREGATION (>500ms): ${durationMs.toFixed(2)}ms`);
+          mongoLogger.warn(
+            pipelineInfo,
+            `SLOW MONGO AGGREGATION (>500ms): ${durationMs.toFixed(2)}ms`,
+          );
         } else {
-          mongoLogger.info(pipelineInfo, `Mongo Aggregation [${modelName}]: ${durationMs.toFixed(2)}ms`);
+          mongoLogger.info(
+            pipelineInfo,
+            `Mongo Aggregation [${modelName}]: ${durationMs.toFixed(2)}ms`,
+          );
         }
       }
     });

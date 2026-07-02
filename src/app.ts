@@ -1,11 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import pinoHttp from "pino-http";
 import { createHash } from "node:crypto";
 import { env } from "./config/env";
-import { logger } from "./config/logger";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { enforceJsonRequests, sanitizeRequestMiddleware } from "./middlewares/sanitize.middleware";
 import { traceMiddleware } from "./middlewares/trace.middleware";
@@ -133,7 +132,10 @@ app.use("/api/v1", (_req, res, next) => {
 });
 
 // Razorpay webhook signature validation requires exact raw request bytes.
-app.use("/api/v1/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }) as any);
+app.use(
+  "/api/v1/webhooks/razorpay",
+  express.raw({ type: "application/json", limit: "2mb" }) as any,
+);
 app.use("/webhooks/razorpay", express.raw({ type: "application/json", limit: "2mb" }) as any);
 app.use("/webhooks", webhookRouter as any);
 

@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 import { connectToDatabase } from "./config/database";
 import { env } from "./config/env";
 import { logger } from "./config/logger";
@@ -59,12 +60,37 @@ async function bootstrap() {
     logger.error({ error }, "Super admin bootstrap failed");
   }
 
-  app.listen(env.PORT, () => {
+  const server = app.listen(env.PORT, () => {
     logger.info(`BookMyEvent API running on port ${env.PORT}`);
     if (process.send) {
       process.send("ready");
     }
   });
+
+  const gracefulShutdown = (signal: string) => {
+    logger.info(`Received ${signal}. Starting graceful shutdown...`);
+
+    server.close(async () => {
+      logger.info("HTTP server closed.");
+      try {
+        await mongoose.connection.close();
+        logger.info("MongoDB connection closed.");
+        process.exit(0);
+      } catch (err) {
+        logger.error({ err }, "Error closing MongoDB connection during shutdown");
+        process.exit(1);
+      }
+    });
+
+    // Fallback force shutdown after 10 seconds
+    setTimeout(() => {
+      logger.error("Could not close connections in time, forcefully shutting down");
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 }
 
 bootstrap().catch((error) => {

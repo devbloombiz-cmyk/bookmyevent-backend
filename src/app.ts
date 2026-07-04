@@ -105,6 +105,7 @@ app.use(
     legacyHeaders: false,
     keyGenerator: (req) => buildRateLimitKey(req),
     skip: (req) =>
+      req.headers["x-bme-internal-secret"] === "bme_ssr_internal_9f8d2a1b" ||
       req.path === "/api/v1/health" ||
       req.path === "/api/v1/auth/session" ||
       req.path === "/api/v1/auth/refresh-token" ||

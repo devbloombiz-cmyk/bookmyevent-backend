@@ -986,6 +986,7 @@ export const venueOwnerService = {
           : Array.isArray(venueOwnerByUserId.profileImages)
             ? venueOwnerByUserId.profileImages.length
             : 0;
+        const topLevelPortfolioImages = Math.max(0, topLevelProfileImages - 1);
 
         await subscriptionService.assertWithinLimit(
           { id: authUser.id, role: "venue_owner" },
@@ -1000,15 +1001,28 @@ export const venueOwnerService = {
         await subscriptionService.assertWithinLimit(
           { id: authUser.id, role: "venue_owner" },
           "maxPortfolioImages",
-          packagePortfolioImages + topLevelProfileImages,
+          packagePortfolioImages + topLevelPortfolioImages,
         );
       }
 
       if (Array.isArray(normalizedPayload.profileImages)) {
+        const topLevelPortfolioImages = Math.max(0, normalizedPayload.profileImages.length - 1);
+        const packagePortfolioImages = Array.isArray(venueOwnerByUserId.venuePackages)
+          ? venueOwnerByUserId.venuePackages.reduce((acc, pkg) => {
+              if (!pkg || typeof pkg !== "object") {
+                return acc;
+              }
+
+              const images = (pkg as unknown as Record<string, unknown>).portfolioImages;
+              const count = Array.isArray(images) ? images.length : 0;
+              return acc + count;
+            }, 0)
+          : 0;
+
         await subscriptionService.assertWithinLimit(
           { id: authUser.id, role: "venue_owner" },
           "maxPortfolioImages",
-          normalizedPayload.profileImages.length,
+          packagePortfolioImages + topLevelPortfolioImages,
         );
       }
 
@@ -1088,6 +1102,7 @@ export const venueOwnerService = {
         : Array.isArray(venueOwner.profileImages)
           ? venueOwner.profileImages.length
           : 0;
+      const topLevelPortfolioImages = Math.max(0, topLevelProfileImages - 1);
 
       await subscriptionService.assertWithinLimit(
         { id: authUser.id, role: "venue_owner" },
@@ -1102,15 +1117,28 @@ export const venueOwnerService = {
       await subscriptionService.assertWithinLimit(
         { id: authUser.id, role: "venue_owner" },
         "maxPortfolioImages",
-        packagePortfolioImages + topLevelProfileImages,
+        packagePortfolioImages + topLevelPortfolioImages,
       );
     }
 
     if (Array.isArray(normalizedPayload.profileImages)) {
+      const topLevelPortfolioImages = Math.max(0, normalizedPayload.profileImages.length - 1);
+      const packagePortfolioImages = Array.isArray(venueOwner.venuePackages)
+        ? venueOwner.venuePackages.reduce((acc, pkg) => {
+            if (!pkg || typeof pkg !== "object") {
+              return acc;
+            }
+
+            const images = (pkg as unknown as Record<string, unknown>).portfolioImages;
+            const count = Array.isArray(images) ? images.length : 0;
+            return acc + count;
+          }, 0)
+        : 0;
+
       await subscriptionService.assertWithinLimit(
         { id: authUser.id, role: "venue_owner" },
         "maxPortfolioImages",
-        normalizedPayload.profileImages.length,
+        packagePortfolioImages + topLevelPortfolioImages,
       );
     }
 

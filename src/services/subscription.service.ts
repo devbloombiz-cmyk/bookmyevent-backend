@@ -59,6 +59,8 @@ const countVenueOwnerPortfolioImages = (venueOwner: Record<string, unknown>) => 
       ).length
     : 0;
 
+  const portfolioProfileImages = Math.max(0, profileImages - 1);
+
   const packageImages = Array.isArray(venueOwner.venuePackages)
     ? venueOwner.venuePackages.reduce((acc, pkg) => {
         if (!pkg || typeof pkg !== "object") {
@@ -76,7 +78,7 @@ const countVenueOwnerPortfolioImages = (venueOwner: Record<string, unknown>) => 
       }, 0)
     : 0;
 
-  return profileImages + packageImages;
+  return portfolioProfileImages + packageImages;
 };
 
 const countVenueOwnerVideoLinks = (venueOwner: Record<string, unknown>) => {

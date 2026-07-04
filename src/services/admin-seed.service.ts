@@ -21,8 +21,6 @@ type BootstrapSuperAdminResult =
     };
 
 const defaultSeedConfig = {
-  email: "ajsal12aju@gmail.com",
-  password: "Admin@12345",
   name: "Platform Super Admin",
   mobile: "9999999999",
 };
@@ -45,8 +43,8 @@ function resolveSeedConfig(allowDefaults: boolean) {
   const mobile = pickFirstNonEmpty(process.env.SEED_ADMIN_MOBILE, process.env.ADMIN_MOBILE);
 
   return {
-    email: email ?? (allowDefaults ? defaultSeedConfig.email : undefined),
-    password: password ?? (allowDefaults ? defaultSeedConfig.password : undefined),
+    email,
+    password,
     name: name ?? (allowDefaults ? defaultSeedConfig.name : undefined),
     mobile: mobile ?? (allowDefaults ? defaultSeedConfig.mobile : undefined),
   };
@@ -84,7 +82,11 @@ export async function bootstrapSuperAdmin(
   const existingByEmail = await userRepository.findByEmail(normalizedEmail);
   const existingByMobile = await userRepository.findByMobile(config.mobile);
 
-  if (existingByEmail && existingByMobile && String(existingByEmail._id) !== String(existingByMobile._id)) {
+  if (
+    existingByEmail &&
+    existingByMobile &&
+    String(existingByEmail._id) !== String(existingByMobile._id)
+  ) {
     throw new Error(
       `Cannot seed admin safely. Email ${normalizedEmail} and mobile ${config.mobile} belong to different users.`,
     );

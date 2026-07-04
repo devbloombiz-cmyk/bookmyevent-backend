@@ -214,7 +214,7 @@ export const createVenueOwnerSchema = z.object({
       city: z.string().min(2),
       locationDisplayName: z.string().optional().default(""),
       addressLine: z.string().optional().default(""),
-      venueType: z.string().min(2).optional(),
+      venueType: z.string().optional(),
       venueTypes: z.array(canonicalVenueTypeEnum).optional().default([]),
       guestCapacity: z
         .object({
@@ -234,14 +234,6 @@ export const createVenueOwnerSchema = z.object({
       venuePackages: z.array(venuePackageSchema).optional().default([]),
     })
     .superRefine((payload, ctx) => {
-      if (!payload.venueType && !payload.venueTypes.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["venueTypes"],
-          message: "Either venueType or venueTypes is required.",
-        });
-      }
-
       if (
         payload.guestCapacity &&
         payload.guestCapacity.maxGuests > 0 &&
@@ -286,7 +278,7 @@ export const updateVenueOwnerSchema = z.object({
       city: z.string().min(2).optional(),
       locationDisplayName: z.string().optional(),
       addressLine: z.string().optional(),
-      venueType: z.string().min(2).optional(),
+      venueType: z.string().optional(),
       venueTypes: z.array(canonicalVenueTypeEnum).optional(),
       guestCapacity: z
         .object({

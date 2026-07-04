@@ -130,7 +130,7 @@ const venueOwnerSchema = new Schema(
     addressLine: { type: String, default: "", trim: true },
     venueType: {
       type: String,
-      required: true,
+      default: "",
     },
     venueTypes: {
       type: [String],

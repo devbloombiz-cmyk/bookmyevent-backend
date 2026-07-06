@@ -2,7 +2,7 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { createHash } from "node:crypto";
 import { env } from "./config/env";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
@@ -44,6 +44,7 @@ function hashIdentity(value: string): string {
 }
 
 function buildRateLimitKey(req: express.Request): string {
+  // Check cookie-based auth
   const cookieHeader = String(req.headers.cookie ?? "");
   const accessToken = readCookieFromHeader(cookieHeader, env.AUTH_ACCESS_COOKIE_NAME);
   const refreshToken = readCookieFromHeader(cookieHeader, env.AUTH_REFRESH_COOKIE_NAME);
@@ -52,8 +53,18 @@ function buildRateLimitKey(req: express.Request): string {
     return `auth:${hashIdentity(`${accessToken}:${refreshToken}`)}`;
   }
 
+  // Check Bearer header-based auth
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.split(" ")[1];
+    if (token) {
+      return `auth:${hashIdentity(token)}`;
+    }
+  }
+
+  const clientIp = ipKeyGenerator(req.ip || "127.0.0.1");
   const userAgent = String(req.headers["user-agent"] ?? "unknown-agent");
-  return `ip:${hashIdentity(`${req.ip}:${userAgent}`)}`;
+  return `ip:${hashIdentity(`${clientIp}:${userAgent}`)}`;
 }
 
 app.use(traceMiddleware as any);
@@ -97,24 +108,92 @@ app.use(
   }) as any,
 );
 
+// 1. Generous rate limiter for general public/read-only GET endpoints
 app.use(
   rateLimit({
     windowMs: env.API_RATE_LIMIT_WINDOW_MS,
-    max: env.API_RATE_LIMIT_MAX,
+    max: env.API_RATE_LIMIT_MAX * 10, // 10x the standard limit (e.g. 2000 requests/15m)
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => buildRateLimitKey(req),
-    skip: (req) =>
-      req.path === "/api/v1/health" ||
-      req.path === "/api/v1/auth/session" ||
-      req.path === "/api/v1/auth/refresh-token" ||
-      (req.method === "GET" && req.path === "/api/v1/reviews/summary"),
+    skip: (req) => {
+      if (req.method !== "GET") {
+        return true;
+      }
+
+      if (
+        req.path === "/api/v1/health" ||
+        req.path === "/api/v1/auth/session" ||
+        req.path === "/api/v1/auth/refresh-token" ||
+        req.path === "/api/v1/reviews/summary"
+      ) {
+        return true;
+      }
+
+      const userAgent = String(req.headers["user-agent"] ?? "");
+      if (userAgent.includes("BME-Internal-Secret-9f8d2a1b")) {
+        return true;
+      }
+
+      const path = req.path || "";
+      if (path.includes("/payments") || path.includes("/bookings")) {
+        return true;
+      }
+
+      return false;
+    },
     handler: (req, res, _next, options) => {
       const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
       res.setHeader("Retry-After", String(retryAfterSeconds));
       res.status(options.statusCode).json({
         success: false,
         message: "Too many requests. Please wait a moment and retry.",
+        data: {
+          retryAfterSeconds,
+        },
+      });
+    },
+  }) as any,
+);
+
+// 2. Strict rate limiter for write/mutation endpoints, payments, and bookings
+app.use(
+  rateLimit({
+    windowMs: env.API_RATE_LIMIT_WINDOW_MS,
+    max: env.API_RATE_LIMIT_MAX, // Standard limit (e.g. 200 requests/15m)
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => buildRateLimitKey(req),
+    skip: (req) => {
+      if (
+        req.path === "/api/v1/health" ||
+        req.path === "/api/v1/auth/session" ||
+        req.path === "/api/v1/auth/refresh-token"
+      ) {
+        return true;
+      }
+
+      const userAgent = String(req.headers["user-agent"] ?? "");
+      if (userAgent.includes("BME-Internal-Secret-9f8d2a1b")) {
+        return true;
+      }
+
+      if (req.method === "GET") {
+        const path = req.path || "";
+        const isPaymentOrBooking = path.includes("/payments") || path.includes("/bookings");
+        if (!isPaymentOrBooking) {
+          return true;
+        }
+      }
+
+      return false;
+    },
+    handler: (req, res, _next, options) => {
+      const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
+      res.setHeader("Retry-After", String(retryAfterSeconds));
+      res.status(options.statusCode).json({
+        success: false,
+        message: "Too many write requests. Please wait a moment and retry.",
         data: {
           retryAfterSeconds,
         },

@@ -113,7 +113,7 @@ if (parsedEnv.NODE_ENV === "production" && parsedEnv.RAZORPAY_ENV === "live") {
   }
 }
 
-const defaultAccessExpiry = parsedEnv.NODE_ENV === "development" ? "7d" : "7d";
+const defaultAccessExpiry = parsedEnv.NODE_ENV === "development" ? "15m" : "15m";
 const defaultRefreshExpiry = parsedEnv.NODE_ENV === "development" ? "90d" : "90d";
 const minimumSessionSeconds = 60 * 60 * 24 * 7;
 
@@ -128,7 +128,7 @@ function ensureMinDuration(input: string | undefined, fallback: string) {
 export const env = {
   ...parsedEnv,
   MONGODB_URI: mongodbUri,
-  JWT_ACCESS_EXPIRES_IN: ensureMinDuration(parsedEnv.JWT_ACCESS_EXPIRES_IN, defaultAccessExpiry),
+  JWT_ACCESS_EXPIRES_IN: parsedEnv.JWT_ACCESS_EXPIRES_IN ?? defaultAccessExpiry,
   JWT_REFRESH_EXPIRES_IN: ensureMinDuration(parsedEnv.JWT_REFRESH_EXPIRES_IN, defaultRefreshExpiry),
   SENDER_NAME: parsedEnv.SENDER_NAME ?? "BookMyEvent",
   SMTP_PORT: parsedEnv.SMTP_PORT ?? 587,

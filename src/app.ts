@@ -131,7 +131,8 @@ app.use(
       }
 
       const userAgent = String(req.headers["user-agent"] ?? "");
-      if (userAgent.includes("BME-Internal-Secret-9f8d2a1b")) {
+      const internalHeader = String(req.headers["x-bme-internal-secret"] ?? "");
+      if (userAgent.includes("BME-Internal-Secret-9f8d2a1b") || internalHeader === "9f8d2a1b") {
         return true;
       }
 
@@ -174,7 +175,8 @@ app.use(
       }
 
       const userAgent = String(req.headers["user-agent"] ?? "");
-      if (userAgent.includes("BME-Internal-Secret-9f8d2a1b")) {
+      const internalHeader = String(req.headers["x-bme-internal-secret"] ?? "");
+      if (userAgent.includes("BME-Internal-Secret-9f8d2a1b") || internalHeader === "9f8d2a1b") {
         return true;
       }
 

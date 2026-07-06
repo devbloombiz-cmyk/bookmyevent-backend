@@ -149,6 +149,8 @@ export const env = {
   AUTH_ACCESS_COOKIE_NAME: parsedEnv.AUTH_ACCESS_COOKIE_NAME ?? "bme_access",
   AUTH_REFRESH_COOKIE_NAME: parsedEnv.AUTH_REFRESH_COOKIE_NAME ?? "bme_refresh",
   AUTH_CSRF_COOKIE_NAME: parsedEnv.AUTH_CSRF_COOKIE_NAME ?? "bme_csrf",
-  APP_BASE_URL: parsedEnv.APP_BASE_URL ?? "http://localhost:5000",
+  APP_BASE_URL:
+    parsedEnv.APP_BASE_URL ??
+    (parsedEnv.NODE_ENV === "production" ? "https://bookmyevent.ae" : "http://localhost:5000"),
   VENDOR_LEAD_ACTION_LINK_EXPIRY_HOURS: parsedEnv.VENDOR_LEAD_ACTION_LINK_EXPIRY_HOURS ?? 48,
 };

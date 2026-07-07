@@ -69,11 +69,11 @@ export const venueOwnerRepository = {
     }
 
     if (typeof filters.district === "string" && filters.district.trim()) {
-      query.district = new RegExp(`^${escapeRegExp(filters.district.trim())}$`, "i");
+      query.district = filters.district.trim();
     }
 
     if (typeof filters.city === "string" && filters.city.trim()) {
-      query.city = new RegExp(`^${escapeRegExp(filters.city.trim())}$`, "i");
+      query.city = filters.city.trim();
     }
 
     if (typeof filters.search === "string" && filters.search.trim()) {

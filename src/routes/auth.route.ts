@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authController } from "../controllers/auth.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { otpSendRateLimit } from "../middlewares/otp-rate-limit.middleware";
-import { loginRateLimit } from "../middlewares/login-rate-limit.middleware";
+import { authRateLimiter } from "../middlewares/rate-limit.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   customerSignupSchema,
@@ -19,43 +19,43 @@ const authRouter = Router();
 
 authRouter.post(
   "/signup/customer",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(customerSignupSchema),
   authController.signupCustomer,
 );
 authRouter.post(
   "/signup/vendor",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(vendorSignupSchema),
   authController.signupVendor,
 );
 authRouter.post(
   "/signup/venue-owner",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(venueOwnerSignupSchema),
   authController.signupVenueOwner,
 );
 authRouter.post(
   "/login/customer",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(loginSchema),
   authController.loginCustomer,
 );
 authRouter.post(
   "/login/vendor",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(loginSchema),
   authController.loginVendor,
 );
 authRouter.post(
   "/login/venue-owner",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(loginSchema),
   authController.loginVenueOwner,
 );
 authRouter.post(
   "/login/admin",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(loginSchema),
   authController.loginAdmin,
 );
@@ -77,7 +77,7 @@ authRouter.post("/logout", authController.logout);
 authRouter.get("/session", requireAuth, authController.getSession);
 authRouter.post(
   "/forgot-password",
-  loginRateLimit,
+  authRateLimiter,
   validateRequest(forgotPasswordSchema),
   authController.forgotPassword,
 );

@@ -3,7 +3,6 @@ import { PermissionKeys } from "../config/permissions";
 import { reviewController } from "../controllers/review.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
-import { reviewSubmissionRateLimit } from "../middlewares/review-rate-limit.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   bookingReviewContextSchema,
@@ -32,7 +31,6 @@ reviewRouter.post(
   "/",
   requireAuth,
   authorize(PermissionKeys.WorkspaceCustomerAccess),
-  reviewSubmissionRateLimit,
   validateRequest(reviewCreateSchema),
   reviewController.createReview,
 );

@@ -48,7 +48,7 @@ export const vendorRepository = {
     }
 
     if (typeof filters.category === "string" && filters.category.trim()) {
-      query.category = new RegExp(`^${escapeRegExp(filters.category.trim())}$`, "i");
+      query.category = filters.category.trim();
     }
 
     if (typeof filters.subCategory === "string" && filters.subCategory.trim()) {
@@ -79,22 +79,22 @@ export const vendorRepository = {
     }
 
     if (typeof filters.state === "string" && filters.state.trim()) {
-      query.state = new RegExp(`^${escapeRegExp(filters.state.trim())}$`, "i");
+      query.state = filters.state.trim();
     }
 
     if (typeof filters.district === "string" && filters.district.trim()) {
-      const districtRegex = new RegExp(`^${escapeRegExp(filters.district.trim())}$`, "i");
+      const districtVal = filters.district.trim();
       const currentAnd = Array.isArray(query.$and) ? query.$and : [];
       query.$and = [
         ...currentAnd,
         {
-          $or: [{ district: districtRegex }, { serviceZones: { $in: [districtRegex] } }],
+          $or: [{ district: districtVal }, { serviceZones: districtVal }],
         },
       ];
     }
 
     if (typeof filters.city === "string" && filters.city.trim()) {
-      query.city = new RegExp(`^${escapeRegExp(filters.city.trim())}$`, "i");
+      query.city = filters.city.trim();
     }
 
     if (typeof filters.isVerified === "boolean") {

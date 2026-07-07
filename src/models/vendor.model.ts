@@ -93,6 +93,5 @@ vendorSchema.index(
 );
 vendorSchema.index({ referredByVendorId: 1, createdAt: -1 });
 vendorSchema.index({ serviceZones: 1 });
-vendorSchema.index({ createdAt: 1 });
 
 export const VendorModel = model("Vendor", vendorSchema);

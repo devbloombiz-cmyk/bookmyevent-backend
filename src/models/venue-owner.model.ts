@@ -166,6 +166,5 @@ venueOwnerSchema.index({ mobile: 1 });
 venueOwnerSchema.index({ businessName: 1 });
 venueOwnerSchema.index({ district: 1 });
 venueOwnerSchema.index({ venueTypes: 1 });
-venueOwnerSchema.index({ createdAt: 1 });
 
 export const VenueOwnerModel = model("VenueOwner", venueOwnerSchema);

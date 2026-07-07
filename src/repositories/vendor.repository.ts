@@ -130,8 +130,16 @@ export const vendorRepository = {
       ];
     }
 
-    const limit =
-      typeof filters.limit === "number" ? Math.max(1, Math.min(1000, filters.limit)) : 50;
+    let limitVal = 50;
+    if (typeof filters.limit === "number") {
+      limitVal = filters.limit;
+    } else if (typeof filters.limit === "string") {
+      const parsed = parseInt(filters.limit, 10);
+      if (!isNaN(parsed)) {
+        limitVal = parsed;
+      }
+    }
+    const limit = Math.max(1, Math.min(1000, limitVal));
 
     return VendorModel.find(query).sort({ createdAt: 1 }).limit(limit);
   },

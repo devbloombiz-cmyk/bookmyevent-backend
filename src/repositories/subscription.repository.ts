@@ -7,12 +7,20 @@ type ActorType = "vendor" | "venue_owner";
 
 export const subscriptionRepository = {
   upsertPlanByCode: (code: string, payload: Record<string, unknown>) =>
-    SubscriptionPlanModel.findOneAndUpdate({ code }, { $set: payload }, { upsert: true, returnDocument: "after" }),
+    SubscriptionPlanModel.findOneAndUpdate(
+      { code },
+      { $set: payload },
+      { upsert: true, returnDocument: "after" },
+    ),
   createPlan: (payload: Record<string, unknown>) => SubscriptionPlanModel.create(payload),
   getPlanByCode: (code: string) => SubscriptionPlanModel.findOne({ code }),
   listAllPlans: () => SubscriptionPlanModel.find({}).sort({ createdAt: -1 }),
   updatePlanByCode: (code: string, payload: Record<string, unknown>) =>
-    SubscriptionPlanModel.findOneAndUpdate({ code }, { $set: payload }, { returnDocument: "after" }),
+    SubscriptionPlanModel.findOneAndUpdate(
+      { code },
+      { $set: payload },
+      { returnDocument: "after" },
+    ),
   listActivePlansByActorType: (actorType: ActorType) =>
     SubscriptionPlanModel.find({ isActive: true, actorTypes: actorType }).sort({ priceInr: 1 }),
   createAccountSubscription: async (payload: Record<string, unknown>, session?: ClientSession) => {
@@ -65,7 +73,8 @@ export const subscriptionRepository = {
       query.planCode = filters.planCode;
     }
 
-    const limit = typeof filters.limit === "number" ? Math.max(1, Math.min(300, filters.limit)) : 120;
+    const limit =
+      typeof filters.limit === "number" ? Math.max(1, Math.min(300, filters.limit)) : 120;
     return AccountSubscriptionModel.find(query).sort({ createdAt: -1 }).limit(limit);
   },
   listSubscriptionsPaginated: async (filters: {
@@ -131,26 +140,38 @@ export const subscriptionRepository = {
       $or: [{ endsAt: null }, { endsAt: { $gte: new Date() } }],
     }).select({ actorId: 1 });
   },
-  updateSubscriptionById: (subscriptionId: string, payload: Record<string, unknown>, session?: ClientSession) =>
+  updateSubscriptionById: (
+    subscriptionId: string,
+    payload: Record<string, unknown>,
+    session?: ClientSession,
+  ) =>
     AccountSubscriptionModel.findByIdAndUpdate(
       subscriptionId,
       payload,
       session ? { returnDocument: "after", session } : { returnDocument: "after" },
     ),
   markWebhookEventProcessed: async (eventId: string, eventType: string, payloadHash: string) => {
-    const result = await RazorpayWebhookEventModel.updateOne(
-      { eventId: eventId.trim() },
-      {
-        $setOnInsert: {
-          eventId: eventId.trim(),
-          eventType: eventType.trim(),
-          payloadHash: payloadHash.trim(),
-          receivedAt: new Date(),
+    try {
+      const result = await RazorpayWebhookEventModel.updateOne(
+        { eventId: eventId.trim() },
+        {
+          $setOnInsert: {
+            eventId: eventId.trim(),
+            eventType: eventType.trim(),
+            payloadHash: payloadHash.trim(),
+            receivedAt: new Date(),
+          },
         },
-      },
-      { upsert: true },
-    );
+        { upsert: true },
+      );
 
-    return result.upsertedCount > 0;
+      return result.upsertedCount > 0;
+    } catch (error: unknown) {
+      const err = error as Record<string, unknown> & { code?: number; codeName?: string };
+      if (err && (err.code === 11000 || err.codeName === "DuplicateKey")) {
+        return false;
+      }
+      throw error;
+    }
   },
 };

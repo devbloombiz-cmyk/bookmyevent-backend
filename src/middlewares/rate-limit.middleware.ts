@@ -57,9 +57,19 @@ export function buildAuthRateLimitKey(req: Request): string {
   return `auth-ip:${hashIdentity(clientIp)}`;
 }
 
-function logRateLimitHit(req: Request, limiterName: string, options: any) {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+interface RateLimitOptions {
+  windowMs: number;
+  limit?: any;
+  max?: any;
+  statusCode?: number;
+  authKey?: string;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+function logRateLimitHit(req: Request, limiterName: string, options: RateLimitOptions) {
   const retryAfterSeconds = Math.max(1, Math.ceil((options.windowMs || 60000) / 1000));
-  
+
   const headers: Record<string, string> = {};
   const interestedHeaders = [
     "user-agent",
@@ -67,7 +77,7 @@ function logRateLimitHit(req: Request, limiterName: string, options: any) {
     "x-real-ip",
     "x-bme-internal-secret",
     "authorization",
-    "cookie"
+    "cookie",
   ];
   for (const h of interestedHeaders) {
     if (req.headers[h]) {
@@ -82,7 +92,7 @@ function logRateLimitHit(req: Request, limiterName: string, options: any) {
     headers["cookie"] = headers["cookie"].substring(0, 30) + "...";
   }
 
-  let generatedKey = "unknown";
+  let generatedKey: string;
   try {
     generatedKey = buildRateLimitKey(req);
   } catch (err) {
@@ -91,19 +101,22 @@ function logRateLimitHit(req: Request, limiterName: string, options: any) {
 
   const authKey = options.authKey || undefined;
 
-  logger.warn({
-    limiter: limiterName,
-    path: req.path,
-    method: req.method,
-    ip: req.ip,
-    ips: req.ips,
-    headers,
-    key: generatedKey,
-    authKey,
-    windowMs: options.windowMs,
-    limit: options.limit || options.max,
-    retryAfterSeconds,
-  }, `Rate limit exceeded on ${limiterName}`);
+  logger.warn(
+    {
+      limiter: limiterName,
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+      ips: req.ips,
+      headers,
+      key: generatedKey,
+      authKey,
+      windowMs: options.windowMs,
+      limit: options.limit || options.max,
+      retryAfterSeconds,
+    },
+    `Rate limit exceeded on ${limiterName}`,
+  );
 }
 
 // 1. GET Rate Limiter (Public read-only endpoints)
@@ -159,7 +172,9 @@ export const authRateLimiter = rateLimit({
     let authKey = "unknown";
     try {
       authKey = buildAuthRateLimitKey(req);
-    } catch {}
+    } catch {
+      // Ignored: key fallback to default
+    }
     logRateLimitHit(req, "authRateLimiter", { ...options, authKey });
     const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
     res.setHeader("Retry-After", String(retryAfterSeconds));

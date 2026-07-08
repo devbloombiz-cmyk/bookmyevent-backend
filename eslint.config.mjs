@@ -5,7 +5,14 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "node_modules/**", "src/scripts/**/*.mongosh.js"],
+    ignores: [
+      "dist/**",
+      "node_modules/**",
+      "src/scripts/**/*.mongosh.js",
+      "scratch-analyze.js",
+      "scratch-test-ip.js",
+      "scratch/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

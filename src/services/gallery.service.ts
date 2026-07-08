@@ -26,9 +26,9 @@ const buildVideoMeta = (mediaUrl: string) => {
     const host = parsed.hostname.toLowerCase();
 
     if (host.includes("youtube.com") || host.includes("youtu.be")) {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|&v=)([^#&?]*).*/;
       const match = mediaUrl.match(regExp);
-      const videoId = (match && match[2].length === 11) ? match[2] : "";
+      const videoId = match && match[2].length === 11 ? match[2] : "";
 
       if (videoId) {
         return {

@@ -65,6 +65,7 @@ const envSchema = z
       .min(60_000)
       .default(15 * 60 * 1000),
     API_RATE_LIMIT_MAX: z.coerce.number().int().min(20).default(1500),
+    API_RATE_LIMIT_GET_MAX: z.coerce.number().int().min(100).default(3000),
     AUTH_COOKIE_DOMAIN: z.string().optional(),
     AUTH_COOKIE_SECURE: z
       .string()

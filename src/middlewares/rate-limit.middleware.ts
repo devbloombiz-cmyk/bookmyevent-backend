@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 import { env } from "../config/env";
+import { logger } from "../config/logger";
 
 function readCookieFromHeader(cookieHeader: string, cookieName: string): string {
   const parts = cookieHeader.split(";");
@@ -56,14 +57,64 @@ export function buildAuthRateLimitKey(req: Request): string {
   return `auth-ip:${hashIdentity(clientIp)}`;
 }
 
+function logRateLimitHit(req: Request, limiterName: string, options: any) {
+  const retryAfterSeconds = Math.max(1, Math.ceil((options.windowMs || 60000) / 1000));
+  
+  const headers: Record<string, string> = {};
+  const interestedHeaders = [
+    "user-agent",
+    "x-forwarded-for",
+    "x-real-ip",
+    "x-bme-internal-secret",
+    "authorization",
+    "cookie"
+  ];
+  for (const h of interestedHeaders) {
+    if (req.headers[h]) {
+      headers[h] = String(req.headers[h]);
+    }
+  }
+
+  if (headers["authorization"]) {
+    headers["authorization"] = headers["authorization"].substring(0, 15) + "...";
+  }
+  if (headers["cookie"]) {
+    headers["cookie"] = headers["cookie"].substring(0, 30) + "...";
+  }
+
+  let generatedKey = "unknown";
+  try {
+    generatedKey = buildRateLimitKey(req);
+  } catch (err) {
+    generatedKey = `error:${String(err)}`;
+  }
+
+  const authKey = options.authKey || undefined;
+
+  logger.warn({
+    limiter: limiterName,
+    path: req.path,
+    method: req.method,
+    ip: req.ip,
+    ips: req.ips,
+    headers,
+    key: generatedKey,
+    authKey,
+    windowMs: options.windowMs,
+    limit: options.limit || options.max,
+    retryAfterSeconds,
+  }, `Rate limit exceeded on ${limiterName}`);
+}
+
 // 1. GET Rate Limiter (Public read-only endpoints)
 export const getLimiter = rateLimit({
   windowMs: env.API_RATE_LIMIT_WINDOW_MS,
-  max: env.API_RATE_LIMIT_MAX * 10, // 10x the standard limit (e.g. 2000 requests/15m)
+  max: env.API_RATE_LIMIT_GET_MAX, // Generous limit for read-only traffic (e.g. 3000 requests/15m)
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: buildRateLimitKey,
   handler: (req, res, _next, options) => {
+    logRateLimitHit(req, "getLimiter", options);
     const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
     res.setHeader("Retry-After", String(retryAfterSeconds));
     res.status(options.statusCode).json({
@@ -84,6 +135,7 @@ export const writeLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: buildRateLimitKey,
   handler: (req, res, _next, options) => {
+    logRateLimitHit(req, "writeLimiter", options);
     const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
     res.setHeader("Retry-After", String(retryAfterSeconds));
     res.status(options.statusCode).json({
@@ -104,6 +156,11 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: buildAuthRateLimitKey,
   handler: (req, res, _next, options) => {
+    let authKey = "unknown";
+    try {
+      authKey = buildAuthRateLimitKey(req);
+    } catch {}
+    logRateLimitHit(req, "authRateLimiter", { ...options, authKey });
     const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
     res.setHeader("Retry-After", String(retryAfterSeconds));
     res.status(options.statusCode).json({
@@ -124,6 +181,7 @@ export const webhookRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => ipKeyGenerator(req.ip || "127.0.0.1"),
   handler: (req, res, _next, options) => {
+    logRateLimitHit(req, "webhookRateLimiter", options);
     res.status(options.statusCode).json({
       success: false,
       message: "Too many webhook requests.",
@@ -140,6 +198,7 @@ export const reviewRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: buildRateLimitKey,
   handler: (req, res, _next, options) => {
+    logRateLimitHit(req, "reviewRateLimiter", options);
     const retryAfterSeconds = Math.max(1, Math.ceil(options.windowMs / 1000));
     res.setHeader("Retry-After", String(retryAfterSeconds));
     res.status(options.statusCode).json({

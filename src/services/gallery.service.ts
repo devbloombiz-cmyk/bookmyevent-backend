@@ -26,12 +26,9 @@ const buildVideoMeta = (mediaUrl: string) => {
     const host = parsed.hostname.toLowerCase();
 
     if (host.includes("youtube.com") || host.includes("youtu.be")) {
-      let videoId = "";
-      if (host.includes("youtu.be")) {
-        videoId = parsed.pathname.replace("/", "").trim();
-      } else {
-        videoId = parsed.searchParams.get("v") || "";
-      }
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|shorts\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+      const match = mediaUrl.match(regExp);
+      const videoId = (match && match[2].length === 11) ? match[2] : "";
 
       if (videoId) {
         return {
@@ -190,5 +187,53 @@ export const galleryService = {
     }
 
     return galleryService.createVendorPortfolioGalleryItems(payload);
+  },
+  createVendorVideoGalleryItems: async (payload: {
+    vendorId: string;
+    vendorName: string;
+    category: string;
+    subCategory: string;
+    city: string;
+    videoUrls: string[];
+  }) => {
+    const galleryRows = payload.videoUrls.map((videoUrl) => {
+      const meta = buildVideoMeta(videoUrl);
+      return {
+        title: `${payload.vendorName} video`,
+        category: payload.category,
+        subCategory: payload.subCategory,
+        mediaType: "video" as const,
+        mediaUrl: videoUrl,
+        sourceType: "vendor" as const,
+        vendorId: payload.vendorId,
+        location: payload.city,
+        isFeatured: false,
+        isActive: true,
+        videoPlatform: meta.videoPlatform,
+        embedUrl: meta.embedUrl,
+      };
+    });
+
+    if (!galleryRows.length) {
+      return [];
+    }
+
+    return galleryRepository.createMany(galleryRows);
+  },
+  syncVendorVideoGalleryItems: async (payload: {
+    vendorId: string;
+    vendorName: string;
+    category: string;
+    subCategory: string;
+    city: string;
+    videoUrls: string[];
+  }) => {
+    await galleryRepository.deleteManyByVendorAndMediaType(payload.vendorId, "video");
+
+    if (!payload.videoUrls.length) {
+      return [];
+    }
+
+    return galleryService.createVendorVideoGalleryItems(payload);
   },
 };

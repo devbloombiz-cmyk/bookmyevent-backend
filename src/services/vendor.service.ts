@@ -863,6 +863,19 @@ export const vendorService = {
         });
       }
 
+      if (Array.isArray(normalizedPayload.videoLinks)) {
+        await galleryService.syncVendorVideoGalleryItems({
+          vendorId: String(updatedVendor._id),
+          vendorName: String(updatedVendor.businessName ?? "Vendor"),
+          category: String(updatedVendor.category ?? "general"),
+          subCategory: String(updatedVendor.subCategory ?? ""),
+          city: String(updatedVendor.city ?? ""),
+          videoUrls: normalizedPayload.videoLinks.filter(
+            (item): item is string => typeof item === "string" && item.trim().length > 0,
+          ),
+        });
+      }
+
       return updatedVendor;
     }
 
@@ -941,6 +954,19 @@ export const vendorService = {
         subCategory: String(updatedVendor.subCategory ?? ""),
         city: String(updatedVendor.city ?? ""),
         mediaUrls: normalizedPayload.portfolioImages.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        ),
+      });
+    }
+
+    if (Array.isArray(normalizedPayload.videoLinks)) {
+      await galleryService.syncVendorVideoGalleryItems({
+        vendorId: String(updatedVendor._id),
+        vendorName: String(updatedVendor.businessName ?? "Vendor"),
+        category: String(updatedVendor.category ?? "general"),
+        subCategory: String(updatedVendor.subCategory ?? ""),
+        city: String(updatedVendor.city ?? ""),
+        videoUrls: normalizedPayload.videoLinks.filter(
           (item): item is string => typeof item === "string" && item.trim().length > 0,
         ),
       });
@@ -1035,6 +1061,31 @@ export const vendorService = {
         subCategory: String(persistedVendor.subCategory ?? ""),
         city: String(persistedVendor.city ?? ""),
         mediaUrls: [],
+      });
+    }
+
+    if (
+      Array.isArray(normalizedPayload.videoLinks) &&
+      normalizedPayload.videoLinks.length > 0
+    ) {
+      await galleryService.syncVendorVideoGalleryItems({
+        vendorId: String(persistedVendor._id),
+        vendorName: String(persistedVendor.businessName ?? "Vendor"),
+        category: String(persistedVendor.category ?? "general"),
+        subCategory: String(persistedVendor.subCategory ?? ""),
+        city: String(persistedVendor.city ?? ""),
+        videoUrls: normalizedPayload.videoLinks.filter(
+          (item): item is string => typeof item === "string" && item.trim().length > 0,
+        ),
+      });
+    } else if ("videoLinks" in normalizedPayload) {
+      await galleryService.syncVendorVideoGalleryItems({
+        vendorId: String(persistedVendor._id),
+        vendorName: String(persistedVendor.businessName ?? "Vendor"),
+        category: String(persistedVendor.category ?? "general"),
+        subCategory: String(persistedVendor.subCategory ?? ""),
+        city: String(persistedVendor.city ?? ""),
+        videoUrls: [],
       });
     }
 

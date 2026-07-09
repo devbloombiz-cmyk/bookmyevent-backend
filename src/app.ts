@@ -13,7 +13,7 @@ import { vendorLeadActionRouter } from "./routes/vendor-lead-action.route";
 
 export const app = express();
 
-app.set("trust proxy", ["loopback", "linklocal", "uniquelocal"]);
+app.set("trust proxy", "loopback, linklocal, uniquelocal, 1");
 
 const defaultLocalOrigins = [
   "https://bookmyevent.ae",

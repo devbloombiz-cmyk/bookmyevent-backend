@@ -9,7 +9,7 @@ module.exports = {
       max_memory_restart: "1G",
       kill_timeout: 4000,
       wait_ready: true,
-      listen_timeout: 15000,
+      listen_timeout: 45000,
       autorestart: true,
       restart_delay: 2000,
       exp_backoff_restart_delay: 100,

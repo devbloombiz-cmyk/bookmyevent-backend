@@ -4,6 +4,7 @@ import { paymentLedgerController } from "../controllers/payment-ledger.controlle
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { paymentRateLimiter } from "../middlewares/rate-limit.middleware";
 import {
   createWithdrawalRequestSchema,
   listWithdrawalRequestsSchema,
@@ -24,6 +25,7 @@ paymentLedgerRouter.get(
 paymentLedgerRouter.post(
   "/withdrawals",
   requireAuth,
+  paymentRateLimiter,
   authorize([PermissionKeys.BookingReadOwnVendor, PermissionKeys.BookingReadAny]),
   validateRequest(createWithdrawalRequestSchema),
   paymentLedgerController.createMyWithdrawalRequest,
@@ -40,6 +42,7 @@ paymentLedgerRouter.get(
 paymentLedgerRouter.patch(
   "/withdrawals/:withdrawalRequestId/status",
   requireAuth,
+  paymentRateLimiter,
   authorize([PermissionKeys.BookingUpdateAny]),
   validateRequest(updateWithdrawalRequestStatusSchema),
   paymentLedgerController.updateWithdrawalRequestStatus,

@@ -4,6 +4,7 @@ import { bookingController } from "../controllers/booking.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { bookingRateLimiter, searchLimiter } from "../middlewares/rate-limit.middleware";
 import {
   bookingBalanceRequestSchema,
   bookingBalanceSendSchema,
@@ -22,6 +23,7 @@ const bookingRouter = Router();
 bookingRouter.get(
   "/",
   requireAuth,
+  searchLimiter,
   authorize([
     PermissionKeys.BookingReadOwnCustomer,
     PermissionKeys.BookingReadOwnVendor,
@@ -33,6 +35,7 @@ bookingRouter.get(
 bookingRouter.post(
   "/",
   requireAuth,
+  bookingRateLimiter,
   validateRequest(bookingCreateSchema),
   bookingController.createBooking,
 );
@@ -53,6 +56,7 @@ bookingRouter.get(
 bookingRouter.put(
   "/:bookingId",
   requireAuth,
+  bookingRateLimiter,
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingUpdateSchema),
   bookingController.updateBooking,
@@ -60,6 +64,7 @@ bookingRouter.put(
 bookingRouter.post(
   "/:bookingId/request-balance",
   requireAuth,
+  bookingRateLimiter,
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingBalanceRequestSchema),
   bookingController.requestBalancePayment,
@@ -74,6 +79,7 @@ bookingRouter.get(
 bookingRouter.post(
   "/:bookingId/payment-requests/:paymentRequestId/send",
   requireAuth,
+  bookingRateLimiter,
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingBalanceSendSchema),
   bookingController.sendBalancePaymentLink,
@@ -81,6 +87,7 @@ bookingRouter.post(
 bookingRouter.post(
   "/:bookingId/payment-requests/:paymentRequestId/mark-received",
   requireAuth,
+  bookingRateLimiter,
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingPaymentReceiveSchema),
   bookingController.markPaymentRequestReceived,
@@ -88,6 +95,7 @@ bookingRouter.post(
 bookingRouter.post(
   "/:bookingId/manual-payment",
   requireAuth,
+  bookingRateLimiter,
   authorize([PermissionKeys.BookingUpdateOwnVendor, PermissionKeys.BookingUpdateAny]),
   validateRequest(bookingManualPaymentSchema),
   bookingController.recordManualPayment,

@@ -4,6 +4,7 @@ import { locationController } from "../controllers/location.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { publicReadLimiter, adminRateLimiter } from "../middlewares/rate-limit.middleware";
 import {
   createLocationSchema,
   deleteLocationEntrySchema,
@@ -13,11 +14,17 @@ import {
 
 const locationRouter = Router();
 
-locationRouter.get("/", validateRequest(listLocationSchema), locationController.listLocations);
+locationRouter.get(
+  "/",
+  publicReadLimiter,
+  validateRequest(listLocationSchema),
+  locationController.listLocations,
+);
 
 locationRouter.post(
   "/",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.LocationManage),
   validateRequest(createLocationSchema),
   locationController.createLocation,
@@ -25,6 +32,7 @@ locationRouter.post(
 locationRouter.put(
   "/entry",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.LocationManage),
   validateRequest(updateLocationEntrySchema),
   locationController.updateLocationEntry,
@@ -32,6 +40,7 @@ locationRouter.put(
 locationRouter.delete(
   "/entry",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.LocationManage),
   validateRequest(deleteLocationEntrySchema),
   locationController.deleteLocationEntry,

@@ -4,6 +4,7 @@ import { galleryController } from "../controllers/gallery.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { publicReadLimiter, adminRateLimiter } from "../middlewares/rate-limit.middleware";
 import {
   createGallerySchema,
   deleteGallerySchema,
@@ -13,11 +14,17 @@ import {
 
 const galleryRouter = Router();
 
-galleryRouter.get("/", validateRequest(listGallerySchema), galleryController.listGalleryItems);
+galleryRouter.get(
+  "/",
+  publicReadLimiter,
+  validateRequest(listGallerySchema),
+  galleryController.listGalleryItems,
+);
 
 galleryRouter.post(
   "/",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.GalleryWrite),
   validateRequest(createGallerySchema),
   galleryController.createGalleryItem,
@@ -25,6 +32,7 @@ galleryRouter.post(
 galleryRouter.put(
   "/:galleryId",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.GalleryWrite),
   validateRequest(updateGallerySchema),
   galleryController.updateGalleryItem,
@@ -32,6 +40,7 @@ galleryRouter.put(
 galleryRouter.delete(
   "/:galleryId",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.GalleryWrite),
   validateRequest(deleteGallerySchema),
   galleryController.deleteGalleryItem,

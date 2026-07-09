@@ -6,7 +6,7 @@ import { env } from "./config/env";
 import { errorMiddleware, notFoundMiddleware } from "./middlewares/error.middleware";
 import { enforceJsonRequests, sanitizeRequestMiddleware } from "./middlewares/sanitize.middleware";
 import { traceMiddleware } from "./middlewares/trace.middleware";
-import { rateLimiterDispatcher } from "./middlewares/rate-limit.middleware";
+import { guestSessionMiddleware } from "./middlewares/rate-limit.middleware";
 import { apiV1Router } from "./routes";
 import { webhookRouter } from "./routes/webhook.route";
 import { vendorLeadActionRouter } from "./routes/vendor-lead-action.route";
@@ -64,7 +64,7 @@ app.use(
   }) as any,
 );
 
-app.use(rateLimiterDispatcher as any);
+app.use(guestSessionMiddleware as any);
 
 app.use("/api/v1", (_req, res, next) => {
   // Prevent stale admin/public API reads caused by intermediary/browser cache layers.

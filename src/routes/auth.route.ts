@@ -1,8 +1,7 @@
 import { Router } from "express";
 import { authController } from "../controllers/auth.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
-import { otpSendRateLimit } from "../middlewares/otp-rate-limit.middleware";
-import { authRateLimiter } from "../middlewares/rate-limit.middleware";
+import { authRateLimiter, otpSendRateLimit } from "../middlewares/rate-limit.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
 import {
   customerSignupSchema,
@@ -71,7 +70,12 @@ authRouter.post(
   validateRequest(requestOtpSchema),
   authController.requestOtp,
 );
-authRouter.post("/verify-otp", validateRequest(verifyOtpSchema), authController.verifyOtp);
+authRouter.post(
+  "/verify-otp",
+  authRateLimiter,
+  validateRequest(verifyOtpSchema),
+  authController.verifyOtp,
+);
 authRouter.post("/refresh-token", validateRequest(refreshTokenSchema), authController.refreshToken);
 authRouter.post("/logout", authController.logout);
 authRouter.get("/session", requireAuth, authController.getSession);

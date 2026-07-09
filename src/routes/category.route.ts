@@ -4,6 +4,7 @@ import { categoryController } from "../controllers/category.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { publicReadLimiter, adminRateLimiter } from "../middlewares/rate-limit.middleware";
 import {
   categoryCreateSchema,
   categoryDeleteSchema,
@@ -15,10 +16,11 @@ import {
 
 const categoryRouter = Router();
 
-categoryRouter.get("/", categoryController.listCategories);
+categoryRouter.get("/", publicReadLimiter, categoryController.listCategories);
 categoryRouter.post(
   "/",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.CategoryManage),
   validateRequest(categoryCreateSchema),
   categoryController.createCategory,
@@ -26,6 +28,7 @@ categoryRouter.post(
 categoryRouter.put(
   "/:categoryId",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.CategoryManage),
   validateRequest(categoryUpdateSchema),
   categoryController.updateCategory,
@@ -33,6 +36,7 @@ categoryRouter.put(
 categoryRouter.delete(
   "/:categoryId",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.CategoryManage),
   validateRequest(categoryDeleteSchema),
   categoryController.deleteCategory,
@@ -40,6 +44,7 @@ categoryRouter.delete(
 categoryRouter.post(
   "/:categoryId/sub-categories",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.CategoryManage),
   validateRequest(subCategoryBulkCreateSchema),
   categoryController.addSubCategories,
@@ -47,6 +52,7 @@ categoryRouter.post(
 categoryRouter.put(
   "/:categoryId/sub-categories/:subCategoryId",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.CategoryManage),
   validateRequest(subCategoryUpdateSchema),
   categoryController.updateSubCategory,
@@ -54,6 +60,7 @@ categoryRouter.put(
 categoryRouter.delete(
   "/:categoryId/sub-categories/:subCategoryId",
   requireAuth,
+  adminRateLimiter,
   authorize(PermissionKeys.CategoryManage),
   validateRequest(subCategoryDeleteSchema),
   categoryController.deleteSubCategory,

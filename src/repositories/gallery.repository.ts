@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { GalleryModel } from "../models/gallery.model";
 
 export const galleryRepository = {
@@ -15,7 +16,12 @@ export const galleryRepository = {
     }
 
     if (typeof filters.vendorId === "string" && filters.vendorId.trim()) {
-      query.vendorId = filters.vendorId.trim();
+      const vendorIdStr = filters.vendorId.trim();
+      if (mongoose.Types.ObjectId.isValid(vendorIdStr)) {
+        query.vendorId = { $in: [vendorIdStr, new mongoose.Types.ObjectId(vendorIdStr)] };
+      } else {
+        query.vendorId = vendorIdStr;
+      }
     }
 
     if (typeof filters.sourceType === "string" && filters.sourceType.trim()) {
@@ -30,6 +36,13 @@ export const galleryRepository = {
   updateById: (galleryId: string, payload: Record<string, unknown>) =>
     GalleryModel.findByIdAndUpdate(galleryId, payload, { returnDocument: "after" }),
   deleteById: (galleryId: string) => GalleryModel.findByIdAndDelete(galleryId),
-  deleteManyByVendorAndMediaType: (vendorId: string, mediaType: "image" | "video") =>
-    GalleryModel.deleteMany({ vendorId, sourceType: "vendor", mediaType }),
+  deleteManyByVendorAndMediaType: (vendorId: string, mediaType: "image" | "video") => {
+    const query: Record<string, unknown> = { sourceType: "vendor", mediaType };
+    if (mongoose.Types.ObjectId.isValid(vendorId)) {
+      query.vendorId = { $in: [vendorId, new mongoose.Types.ObjectId(vendorId)] };
+    } else {
+      query.vendorId = vendorId;
+    }
+    return GalleryModel.deleteMany(query);
+  },
 };

@@ -1,7 +1,7 @@
 import { AccountSubscriptionModel } from "../models/account-subscription.model";
 import { RazorpayWebhookEventModel } from "../models/razorpay-webhook-event.model";
 import { SubscriptionPlanModel } from "../models/subscription-plan.model";
-import type { ClientSession } from "mongoose";
+import { Types, type ClientSession } from "mongoose";
 
 type ActorType = "vendor" | "venue_owner";
 
@@ -32,8 +32,15 @@ export const subscriptionRepository = {
   },
   findAccountSubscriptionById: (subscriptionId: string, session?: ClientSession) =>
     AccountSubscriptionModel.findById(subscriptionId, undefined, session ? { session } : undefined),
-  findLatestByActor: (actorType: ActorType, actorId: string) =>
-    AccountSubscriptionModel.findOne({ actorType, actorId }).sort({ createdAt: -1 }),
+  findLatestByActor: (actorType: ActorType, actorId: string) => {
+    const query: Record<string, unknown> = { actorType };
+    if (Types.ObjectId.isValid(actorId)) {
+      query.actorId = new Types.ObjectId(actorId);
+    } else {
+      query.actorId = actorId;
+    }
+    return AccountSubscriptionModel.findOne(query).sort({ createdAt: -1 });
+  },
   findByPaymentReference: (paymentReference: string) =>
     AccountSubscriptionModel.findOne({ paymentReference: paymentReference.trim() }),
   findByProviderPaymentId: (providerPaymentId: string, session?: ClientSession) =>
@@ -131,9 +138,17 @@ export const subscriptionRepository = {
       return [];
     }
 
+    const objectIds = actorIds
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+
+    if (!objectIds.length) {
+      return [];
+    }
+
     return AccountSubscriptionModel.find({
       actorType,
-      actorId: { $in: actorIds },
+      actorId: { $in: objectIds },
       planCode: { $ne: "FREE" },
       status: "active",
       paymentStatus: "confirmed",

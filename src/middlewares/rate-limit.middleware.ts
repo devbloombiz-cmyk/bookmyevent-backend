@@ -8,8 +8,8 @@ import { getRedisClient } from "../config/redis";
 
 const INTERNAL_BYPASS_SECRET = "EImLgveIFlzQG8gwpZueTc+cnZBIeJKKMtoYQ2DOfzo=";
 
-const API_RATE_LIMIT_PUBLIC_READ_MAX = 2000;
-const API_RATE_LIMIT_SEARCH_MAX = 1000;
+const API_RATE_LIMIT_PUBLIC_READ_MAX = 3000;
+const API_RATE_LIMIT_SEARCH_MAX = 3000;
 const API_RATE_LIMIT_AUTH_MAX = 10;
 const API_RATE_LIMIT_WRITE_MAX = 100;
 const API_RATE_LIMIT_ADMIN_MAX = 1000;
@@ -76,13 +76,6 @@ const wrappedKeyGenerator = (customKeyGen?: (req: Request) => string) => {
 // 3. Secure Server-to-Server Bypass Check
 export function isTrustedInternalRequest(req: Request): boolean {
   if (!INTERNAL_BYPASS_SECRET) {
-    return false;
-  }
-
-  // Block browser clients spoofing the header or User-Agent
-  const secFetchDest = req.headers["sec-fetch-dest"];
-  const secFetchSite = req.headers["sec-fetch-site"];
-  if (secFetchDest || secFetchSite) {
     return false;
   }
 

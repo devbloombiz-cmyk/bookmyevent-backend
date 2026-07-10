@@ -4,7 +4,7 @@ import { categoryController } from "../controllers/category.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
-import { publicReadLimiter, adminRateLimiter } from "../middlewares/rate-limit.middleware";
+import { adminRateLimiter } from "../middlewares/rate-limit.middleware";
 import {
   categoryCreateSchema,
   categoryDeleteSchema,
@@ -16,7 +16,7 @@ import {
 
 const categoryRouter = Router();
 
-categoryRouter.get("/", publicReadLimiter, categoryController.listCategories);
+categoryRouter.get("/", categoryController.listCategories);
 categoryRouter.post(
   "/",
   requireAuth,

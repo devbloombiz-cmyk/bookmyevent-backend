@@ -59,13 +59,6 @@ const envSchema = z
     REDIS_URL: z.string().optional(),
     ALLOWED_ORIGINS: z.string().optional(),
     TRUST_PROXY: z.coerce.number().int().min(0).max(10).default(1),
-    API_RATE_LIMIT_WINDOW_MS: z.coerce
-      .number()
-      .int()
-      .min(60_000)
-      .default(15 * 60 * 1000),
-    API_RATE_LIMIT_MAX: z.coerce.number().int().min(20).default(1500),
-    API_RATE_LIMIT_GET_MAX: z.coerce.number().int().min(100).default(3000),
     AUTH_COOKIE_DOMAIN: z.string().optional(),
     AUTH_COOKIE_SECURE: z
       .string()

@@ -76,13 +76,6 @@ const envSchema = z
     AUTH_CSRF_COOKIE_NAME: z.string().optional(),
     APP_BASE_URL: z.string().optional(),
     VENDOR_LEAD_ACTION_LINK_EXPIRY_HOURS: z.coerce.number().int().min(1).optional(),
-    INTERNAL_BYPASS_SECRET: z.string().optional(),
-    API_RATE_LIMIT_PUBLIC_READ_MAX: z.coerce.number().int().min(100).default(5000),
-    API_RATE_LIMIT_SEARCH_MAX: z.coerce.number().int().min(50).default(1000),
-    API_RATE_LIMIT_AUTH_MAX: z.coerce.number().int().min(5).default(30),
-    API_RATE_LIMIT_WRITE_MAX: z.coerce.number().int().min(10).default(300),
-    API_RATE_LIMIT_ADMIN_MAX: z.coerce.number().int().min(50).default(1000),
-    API_RATE_LIMIT_WEBHOOK_MAX: z.coerce.number().int().min(100).default(10000),
   })
   .transform((rawEnv) => ({
     ...rawEnv,
@@ -97,14 +90,6 @@ const parsedEnv = envSchema.parse(process.env);
 
 if (!parsedEnv.MONGODB_URI) {
   throw new Error("Either MONGO_URI or MONGODB_URI must be provided");
-}
-
-if (parsedEnv.NODE_ENV === "production") {
-  if (!parsedEnv.INTERNAL_BYPASS_SECRET || parsedEnv.INTERNAL_BYPASS_SECRET.trim().length < 16) {
-    throw new Error(
-      "INTERNAL_BYPASS_SECRET must be configured in production and be at least 16 characters long.",
-    );
-  }
 }
 
 const mongodbUri = parsedEnv.MONGODB_URI;
@@ -169,5 +154,4 @@ export const env = {
     parsedEnv.APP_BASE_URL ??
     (parsedEnv.NODE_ENV === "production" ? "https://bookmyevent.ae" : "http://localhost:5000"),
   VENDOR_LEAD_ACTION_LINK_EXPIRY_HOURS: parsedEnv.VENDOR_LEAD_ACTION_LINK_EXPIRY_HOURS ?? 48,
-  INTERNAL_BYPASS_SECRET: parsedEnv.INTERNAL_BYPASS_SECRET ?? "9f8d2a1b",
 };

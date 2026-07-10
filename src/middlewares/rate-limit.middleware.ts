@@ -1,9 +1,19 @@
 import { createHash, randomUUID } from "node:crypto";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit, { ipKeyGenerator, type Store } from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 import { env } from "../config/env";
 import { logger } from "../config/logger";
 import { parseCookieHeader } from "../utils/cookie";
+import { getRedisClient } from "../config/redis";
+
+const INTERNAL_BYPASS_SECRET = "EImLgveIFlzQG8gwpZueTc+cnZBIeJKKMtoYQ2DOfzo=";
+
+const API_RATE_LIMIT_PUBLIC_READ_MAX = 2000;
+const API_RATE_LIMIT_SEARCH_MAX = 1000;
+const API_RATE_LIMIT_AUTH_MAX = 10;
+const API_RATE_LIMIT_WRITE_MAX = 100;
+const API_RATE_LIMIT_ADMIN_MAX = 1000;
+const API_RATE_LIMIT_WEBHOOK_MAX = 3500;
 
 function hashIdentity(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 20);
@@ -55,29 +65,164 @@ export function buildRateLimitKey(req: Request): string {
   return `ip_ua:${hashIdentity(`${clientIp}:${userAgent}`)}`;
 }
 
+const wrappedKeyGenerator = (customKeyGen?: (req: Request) => string) => {
+  return (req: Request) => {
+    const key = customKeyGen ? customKeyGen(req) : buildRateLimitKey(req);
+    (req as Request & { rateLimitKey?: string }).rateLimitKey = key;
+    return key;
+  };
+};
+
 // 3. Secure Server-to-Server Bypass Check
 export function isTrustedInternalRequest(req: Request): boolean {
-  const secretHeader = req.headers["x-bme-internal-secret"];
-  const userAgent = req.headers["user-agent"] || "";
-
-  // Enforce bypass secret
-  if (!env.INTERNAL_BYPASS_SECRET || secretHeader !== env.INTERNAL_BYPASS_SECRET) {
+  if (!INTERNAL_BYPASS_SECRET) {
     return false;
   }
 
-  // Block browser clients spoofing the header
+  // Block browser clients spoofing the header or User-Agent
   const secFetchDest = req.headers["sec-fetch-dest"];
   const secFetchSite = req.headers["sec-fetch-site"];
   if (secFetchDest || secFetchSite) {
     return false;
   }
 
-  // Verify internal user-agent signature
-  if (userAgent.includes("BME-Internal-Secret")) {
+  // A. Check headers (allow both hyphenated and legacy underscored version)
+  const secretHeader = req.headers["x-bme-bypass-secret"] || req.headers["x-bme-internal-secret"];
+  if (secretHeader === INTERNAL_BYPASS_SECRET) {
+    return true;
+  }
+
+  // B. Verify internal user-agent signature containing the exact secret
+  const userAgent = req.headers["user-agent"] || "";
+  const signatureToken = `BME-Internal-Secret-${INTERNAL_BYPASS_SECRET}`;
+  if (userAgent.includes(signatureToken)) {
     return true;
   }
 
   return false;
+}
+
+interface IncrementResponse {
+  totalHits: number;
+  resetTime: Date;
+}
+
+class MemoryStoreFallback {
+  private windowMs: number;
+  private hits = new Map<string, { count: number; resetTime: number }>();
+
+  constructor(windowMs: number) {
+    this.windowMs = windowMs;
+  }
+
+  increment(key: string): IncrementResponse {
+    const now = Date.now();
+    const record = this.hits.get(key);
+
+    if (!record || record.resetTime <= now) {
+      const resetTime = now + this.windowMs;
+      this.hits.set(key, { count: 1, resetTime });
+      return { totalHits: 1, resetTime: new Date(resetTime) };
+    }
+
+    record.count += 1;
+    return { totalHits: record.count, resetTime: new Date(record.resetTime) };
+  }
+
+  decrement(key: string): void {
+    const now = Date.now();
+    const record = this.hits.get(key);
+    if (record && record.resetTime > now) {
+      record.count = Math.max(0, record.count - 1);
+    }
+  }
+
+  resetKey(key: string): void {
+    this.hits.delete(key);
+  }
+}
+
+class RedisRateLimitStore implements Store {
+  windowMs: number;
+  prefix: string;
+  private fallbackStore: MemoryStoreFallback;
+
+  constructor(windowMs: number, prefix: string) {
+    this.windowMs = windowMs;
+    this.prefix = prefix;
+    this.fallbackStore = new MemoryStoreFallback(windowMs);
+  }
+
+  async increment(key: string): Promise<IncrementResponse> {
+    const redis = getRedisClient();
+    if (!redis) {
+      return this.fallbackStore.increment(key);
+    }
+
+    const redisKey = `rl:${this.prefix}:${key}`;
+    try {
+      const multi = redis.multi();
+      multi.incr(redisKey);
+      multi.ttl(redisKey);
+      const results = await multi.exec();
+
+      if (!results) {
+        throw new Error("Redis multi execution returned null");
+      }
+
+      const totalHits = results[0][1] as number;
+      const ttl = results[1][1] as number;
+
+      let resetTime: Date;
+      if (ttl < 0) {
+        const expirySeconds = Math.ceil(this.windowMs / 1000);
+        await redis.expire(redisKey, expirySeconds);
+        resetTime = new Date(Date.now() + this.windowMs);
+      } else {
+        resetTime = new Date(Date.now() + ttl * 1000);
+      }
+
+      return {
+        totalHits,
+        resetTime,
+      };
+    } catch (err) {
+      logger.error({ err, redisKey }, "Redis rate limit increment error, falling back to memory");
+      return this.fallbackStore.increment(key);
+    }
+  }
+
+  async decrement(key: string): Promise<void> {
+    const redis = getRedisClient();
+    if (!redis) {
+      this.fallbackStore.decrement(key);
+      return;
+    }
+
+    const redisKey = `rl:${this.prefix}:${key}`;
+    try {
+      await redis.decr(redisKey);
+    } catch (err) {
+      logger.error({ err, redisKey }, "Redis rate limit decrement error");
+      this.fallbackStore.decrement(key);
+    }
+  }
+
+  async resetKey(key: string): Promise<void> {
+    const redis = getRedisClient();
+    if (!redis) {
+      this.fallbackStore.resetKey(key);
+      return;
+    }
+
+    const redisKey = `rl:${this.prefix}:${key}`;
+    try {
+      await redis.del(redisKey);
+    } catch (err) {
+      logger.error({ err, redisKey }, "Redis rate limit resetKey error");
+      this.fallbackStore.resetKey(key);
+    }
+  }
 }
 
 interface LogOptions {
@@ -92,17 +237,35 @@ function logRateLimitHit(req: Request, limiterName: string, options: LogOptions)
   const guestId = cookies["bme_guest_id"] || req.guestId || "none";
   const userId = req.authUser?.id || "anonymous";
 
+  const customReq = req as Request & {
+    rateLimit?: { resetTime?: Date; current?: number; remaining?: number; limit?: number };
+    rateLimitKey?: string;
+    id?: string;
+  };
+
+  const rateLimit = customReq.rateLimit;
+  const resetTime = rateLimit?.resetTime;
+  const retryAfter = resetTime ? Math.ceil((resetTime.getTime() - Date.now()) / 1000) : 0;
+  const generatedKey = customReq.rateLimitKey || "none";
+
   logger.warn(
     {
       limiter: limiterName,
       path: req.originalUrl || req.path,
       method: req.method,
-      ip: req.ip,
-      userAgent: req.headers["user-agent"] || "none",
+      requestId: customReq.id || "none",
+      generatedKey,
       userId,
       guestId,
-      windowMs: options.windowMs,
-      limit: options.limit ?? options.max,
+      clientIp: req.ip || "127.0.0.1",
+      forwardedIp: req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || "none",
+      userAgent: req.headers["user-agent"] || "none",
+      requestCount: rateLimit?.current,
+      remainingRequests: rateLimit?.remaining,
+      configuredLimit: rateLimit?.limit ?? options.limit ?? options.max,
+      resetTime: resetTime ? resetTime.toISOString() : "none",
+      retryAfter,
+      exactReason: `Rate limit exceeded on '${limiterName}'. Current count (${rateLimit?.current}) exceeded the configured limit (${rateLimit?.limit ?? options.limit ?? options.max}) for key '${generatedKey}'.`,
       timestamp: new Date().toISOString(),
     },
     `Rate limit exceeded: ${limiterName}`,
@@ -113,12 +276,13 @@ function logRateLimitHit(req: Request, limiterName: string, options: LogOptions)
 
 // GET public read-only pages (e.g. categories, locations, blogs, gallery)
 export const publicReadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_PUBLIC_READ_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_PUBLIC_READ_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
   skip: isTrustedInternalRequest,
+  store: new RedisRateLimitStore(5 * 60 * 1000, "public_read"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "publicReadLimiter", options);
     res.status(429).json({
@@ -130,12 +294,13 @@ export const publicReadLimiter = rateLimit({
 
 // GET listing pages / Search / Filters (more resource intensive)
 export const searchLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_SEARCH_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_SEARCH_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
   skip: isTrustedInternalRequest,
+  store: new RedisRateLimitStore(5 * 60 * 1000, "search"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "searchLimiter", options);
     res.status(429).json({
@@ -147,11 +312,12 @@ export const searchLimiter = rateLimit({
 
 // Authentication attempts (login, signup, reset password)
 export const authRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_AUTH_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_AUTH_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "auth"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "authRateLimiter", options);
     res.status(429).json({
@@ -163,34 +329,36 @@ export const authRateLimiter = rateLimit({
 
 // OTP Send/Requests
 export const otpSendRateLimit = rateLimit({
-  windowMs: 10 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => {
+  keyGenerator: wrappedKeyGenerator((req) => {
     const body = req.body as { email?: string; mobile?: string; identifier?: string } | undefined;
     const identifier = body?.email ?? body?.mobile ?? body?.identifier;
     if (identifier && typeof identifier === "string" && identifier.trim()) {
       return `otp:${hashIdentity(identifier.trim().toLowerCase())}`;
     }
     return buildRateLimitKey(req);
-  },
+  }),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "otp_send"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "otpSendRateLimit", options);
     res.status(429).json({
       success: false,
-      message: "Too many OTP requests. Please wait 10 minutes and try again.",
+      message: "Too many OTP requests. Please wait 5 minutes and try again.",
     });
   },
 });
 
 // Booking requests
 export const bookingRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_WRITE_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_WRITE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "booking"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "bookingRateLimiter", options);
     res.status(429).json({
@@ -202,11 +370,12 @@ export const bookingRateLimiter = rateLimit({
 
 // Payment transactions
 export const paymentRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_WRITE_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_WRITE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "payment"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "paymentRateLimiter", options);
     res.status(429).json({
@@ -218,11 +387,12 @@ export const paymentRateLimiter = rateLimit({
 
 // Dashboard actions for Admins, Vendors, and Venue Owners
 export const adminRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_ADMIN_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_ADMIN_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "admin"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "adminRateLimiter", options);
     res.status(429).json({
@@ -234,11 +404,12 @@ export const adminRateLimiter = rateLimit({
 
 // Verified incoming Payment Webhooks
 export const webhookRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: env.API_RATE_LIMIT_WEBHOOK_MAX,
+  windowMs: 5 * 60 * 1000,
+  max: API_RATE_LIMIT_WEBHOOK_MAX,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => ipKeyGenerator(req.ip || "127.0.0.1"),
+  keyGenerator: wrappedKeyGenerator((req) => ipKeyGenerator(req.ip || "127.0.0.1")),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "webhook"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "webhookRateLimiter", options);
     res.status(429).json({
@@ -250,11 +421,12 @@ export const webhookRateLimiter = rateLimit({
 
 // Public Review Submissions
 export const reviewRateLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000,
-  max: 6,
+  windowMs: 5 * 60 * 1000,
+  max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: buildRateLimitKey,
+  keyGenerator: wrappedKeyGenerator(),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "review"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "reviewRateLimiter", options);
     res.status(429).json({

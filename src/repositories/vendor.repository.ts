@@ -82,7 +82,11 @@ export const vendorRepository = {
       query.state = filters.state.trim();
     }
 
-    if (typeof filters.district === "string" && filters.district.trim()) {
+    if (
+      typeof filters.district === "string" &&
+      filters.district.trim() &&
+      filters.district !== "All Districts"
+    ) {
       const districtVal = filters.district.trim();
       const currentAnd = Array.isArray(query.$and) ? query.$and : [];
       query.$and = [

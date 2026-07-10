@@ -68,7 +68,11 @@ export const venueOwnerRepository = {
       }
     }
 
-    if (typeof filters.district === "string" && filters.district.trim()) {
+    if (
+      typeof filters.district === "string" &&
+      filters.district.trim() &&
+      filters.district !== "All Districts"
+    ) {
       query.district = filters.district.trim();
     }
 

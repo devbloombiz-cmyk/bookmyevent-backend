@@ -8,12 +8,12 @@ import { getRedisClient } from "../config/redis";
 
 const INTERNAL_BYPASS_SECRET = "EImLgveIFlzQG8gwpZueTc+cnZBIeJKKMtoYQ2DOfzo=";
 
-const API_RATE_LIMIT_PUBLIC_READ_MAX = 3000;
-const API_RATE_LIMIT_SEARCH_MAX = 3000;
+const API_RATE_LIMIT_PUBLIC_READ_MAX = 5000;
+const API_RATE_LIMIT_SEARCH_MAX = 5000;
 const API_RATE_LIMIT_AUTH_MAX = 10;
 const API_RATE_LIMIT_WRITE_MAX = 100;
 const API_RATE_LIMIT_ADMIN_MAX = 1000;
-const API_RATE_LIMIT_WEBHOOK_MAX = 3500;
+const API_RATE_LIMIT_WEBHOOK_MAX = 5000;
 
 function hashIdentity(value: string): string {
   return createHash("sha256").update(value).digest("hex").slice(0, 20);

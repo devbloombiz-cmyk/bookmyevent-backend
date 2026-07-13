@@ -505,7 +505,6 @@ export function renderLeadReviewPage(lead: ReviewLeadInput): string {
   <!-- Custom Confirmation Modal -->
   <div id="confirmModal" class="modal-overlay">
     <div class="modal-card">
-      <h3 id="modalTitle">Confirm Action</h3>
       <p id="modalDescription">Are you sure you want to proceed?</p>
       <div class="modal-actions">
         <button id="modalCancelBtn" class="btn btn-secondary">Cancel</button>

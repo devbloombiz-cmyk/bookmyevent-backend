@@ -279,9 +279,13 @@ export const userService = {
       activeLeads,
     ] = await Promise.all([
       UserModel.countDocuments({ isActive: true }),
-      VendorModel.countDocuments({ isActive: true }),
+      VendorModel.countDocuments({ profileType: { $ne: "venue_owner_shadow" }, isActive: true }),
       VenueOwnerModel.countDocuments({ isActive: true }),
-      VendorModel.countDocuments({ approvalStatus: "pending", isActive: true }),
+      VendorModel.countDocuments({
+        profileType: { $ne: "venue_owner_shadow" },
+        approvalStatus: "pending",
+        isActive: true,
+      }),
       VenueOwnerModel.countDocuments({ approvalStatus: "pending", isActive: true }),
       BookingModel.countDocuments({ createdAt: { $gte: startOfToday } }),
       BookingModel.aggregate<{ _id: null; total: number }>([

@@ -4,7 +4,7 @@ import { blogController } from "../controllers/blog.controller";
 import { requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
-import { adminRateLimiter } from "../middlewares/rate-limit.middleware";
+import { adminRateLimiter, publicReadLimiter } from "../middlewares/rate-limit.middleware";
 import {
   blogBySlugSchema,
   createBlogSchema,
@@ -15,8 +15,13 @@ import {
 
 const blogRouter = Router();
 
-blogRouter.get("/", validateRequest(listBlogSchema), blogController.listBlogs);
-blogRouter.get("/slug/:slug", validateRequest(blogBySlugSchema), blogController.getBlogBySlug);
+blogRouter.get("/", publicReadLimiter, validateRequest(listBlogSchema), blogController.listBlogs);
+blogRouter.get(
+  "/slug/:slug",
+  publicReadLimiter,
+  validateRequest(blogBySlugSchema),
+  blogController.getBlogBySlug,
+);
 blogRouter.post(
   "/",
   requireAuth,

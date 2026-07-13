@@ -269,13 +269,13 @@ function logRateLimitHit(req: Request, limiterName: string, options: LogOptions)
 
 // GET public read-only pages (e.g. categories, locations, blogs, gallery)
 export const publicReadLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: API_RATE_LIMIT_PUBLIC_READ_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
   skip: isTrustedInternalRequest,
-  store: new RedisRateLimitStore(1 * 60 * 1000, "public_read"),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "public_read"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "publicReadLimiter", options);
     res.status(429).json({
@@ -287,13 +287,13 @@ export const publicReadLimiter = rateLimit({
 
 // GET listing pages / Search / Filters (more resource intensive)
 export const searchLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: API_RATE_LIMIT_SEARCH_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
   skip: isTrustedInternalRequest,
-  store: new RedisRateLimitStore(1 * 60 * 1000, "search"),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "search"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "searchLimiter", options);
     res.status(429).json({
@@ -346,12 +346,12 @@ export const otpSendRateLimit = rateLimit({
 
 // Booking requests
 export const bookingRateLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: API_RATE_LIMIT_WRITE_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
-  store: new RedisRateLimitStore(1 * 60 * 1000, "booking"),
+  store: new RedisRateLimitStore(5 * 60 * 1000, "booking"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "bookingRateLimiter", options);
     res.status(429).json({

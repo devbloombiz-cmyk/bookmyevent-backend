@@ -4,6 +4,7 @@ import { vendorController } from "../controllers/vendor.controller";
 import { attachAuthIfPresent, requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { publicReadLimiter } from "../middlewares/rate-limit.middleware";
 import {
   vendorAdminReferralVendorsSchema,
   vendorCreateSchema,
@@ -20,6 +21,7 @@ const vendorRouter = Router();
 vendorRouter.get(
   "/",
   attachAuthIfPresent,
+  publicReadLimiter,
   validateRequest(vendorListSchema),
   vendorController.listVendors,
 );
@@ -31,6 +33,7 @@ vendorRouter.get(
 );
 vendorRouter.get(
   "/referral-code/:code",
+  publicReadLimiter,
   validateRequest(vendorReferralCodeValidationSchema),
   vendorController.validateReferralCode,
 );
@@ -48,7 +51,12 @@ vendorRouter.get(
   validateRequest(vendorAdminReferralVendorsSchema),
   vendorController.listAdminReferralVendors,
 );
-vendorRouter.get("/:vendorId", validateRequest(vendorDeleteSchema), vendorController.getVendorById);
+vendorRouter.get(
+  "/:vendorId",
+  publicReadLimiter,
+  validateRequest(vendorDeleteSchema),
+  vendorController.getVendorById,
+);
 vendorRouter.post(
   "/",
   attachAuthIfPresent,

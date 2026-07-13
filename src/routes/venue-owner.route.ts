@@ -4,6 +4,7 @@ import { venueOwnerController } from "../controllers/venue-owner.controller";
 import { attachAuthIfPresent, requireAuth } from "../middlewares/auth.middleware";
 import { authorize } from "../middlewares/authorize.middleware";
 import { validateRequest } from "../middlewares/validate-request.middleware";
+import { publicReadLimiter } from "../middlewares/rate-limit.middleware";
 import {
   createVenueOwnerSchema,
   listVenueOwnerSchema,
@@ -17,6 +18,7 @@ const venueOwnerRouter = Router();
 venueOwnerRouter.get(
   "/",
   attachAuthIfPresent,
+  publicReadLimiter,
   validateRequest(listVenueOwnerSchema),
   venueOwnerController.listVenueOwners,
 );
@@ -28,6 +30,7 @@ venueOwnerRouter.get(
 );
 venueOwnerRouter.get(
   "/:venueOwnerId",
+  publicReadLimiter,
   validateRequest(venueOwnerIdSchema),
   venueOwnerController.getVenueOwnerById,
 );

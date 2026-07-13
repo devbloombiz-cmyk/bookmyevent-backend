@@ -140,10 +140,17 @@ async function hydrateBookingCustomerDetails(booking: Record<string, unknown>) {
     String(lead?.customerEmail || "").trim() ||
     extractFromMessage(String(lead?.message || ""), "Email");
 
+  const eventTime = lead?.message
+    ? extractFromMessage(String(lead.message), "Event Time") ||
+      extractFromMessage(String(lead.message), "Time") ||
+      extractFromMessage(String(lead.message), "Function time")
+    : "";
+
   const nextPayload = {
     customerName,
     customerMobile,
     customerEmail,
+    eventTime,
   };
 
   const hasChanges =

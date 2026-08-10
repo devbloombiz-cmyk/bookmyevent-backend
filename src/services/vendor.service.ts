@@ -232,7 +232,10 @@ const buildNormalizedVendorPayload = (
   return normalized;
 };
 
-const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
+const ensureVendorUserAccount = async (
+  payload: Record<string, unknown>,
+  options?: { excludeVendorId?: string },
+) => {
   const email = normalizeText(payload.email).toLowerCase();
   const mobile = normalizeText(payload.mobile);
   if (!email || !mobile) {
@@ -254,6 +257,17 @@ const ensureVendorUserAccount = async (payload: Record<string, unknown>) => {
 
   const existingUser = userByMobile ?? userByEmail;
   if (existingUser) {
+    const existingVendor = await vendorRepository.findByUserId(existingUser.id);
+    if (
+      existingVendor &&
+      (!options?.excludeVendorId || String(existingVendor._id) !== options.excludeVendorId)
+    ) {
+      throw new ApiError(
+        409,
+        "This account is already linked to another profile. Please login with the existing account or use a different email/mobile.",
+      );
+    }
+
     const updatedUser = await userRepository.updateById(existingUser.id, {
       name,
       email,
@@ -642,38 +656,13 @@ export const vendorService = {
 
     await syncLocationIfPresent(normalizedPayload);
 
-    const vendor = await vendorRepository.create(normalizedPayload);
-    const linkedUser = await (async () => {
-      try {
-        return await ensureVendorUserAccount(normalizedPayload);
-      } catch (error) {
-        try {
-          await vendorRepository.deleteById(String(vendor._id));
-        } catch (rollbackError) {
-          logger.error(
-            {
-              vendorId: String(vendor._id),
-              rollbackError,
-            },
-            "Failed to rollback vendor record after user-link failure",
-          );
-        }
-        throw error;
-      }
-    })();
-
-    let persistedVendor = vendor;
+    const linkedUser = await ensureVendorUserAccount(normalizedPayload);
     if (linkedUser?._id) {
-      const updatedVendor = await vendorRepository.updateById(String(vendor._id), {
-        userId: linkedUser._id,
-      });
-      if (!updatedVendor) {
-        await vendorRepository.deleteById(String(vendor._id));
-        throw new ApiError(500, "Unable to link vendor account. Please try again.");
-      }
       normalizedPayload.userId = linkedUser._id;
-      persistedVendor = updatedVendor;
     }
+
+    const vendor = await vendorRepository.create(normalizedPayload);
+    const persistedVendor = vendor;
 
     await syncVendorUserStatus(persistedVendor.toObject(), normalizedPayload);
 
@@ -995,12 +984,15 @@ export const vendorService = {
     if (linkedUserId) {
       await syncUserAccount(String(linkedUserId), normalizedPayload, existingVendor.toObject());
     } else {
-      const linkedUser = await ensureVendorUserAccount({
-        email: normalizedPayload.email ?? existingVendor.email,
-        mobile: normalizedPayload.mobile ?? existingVendor.mobile,
-        ownerName: normalizedPayload.ownerName ?? existingVendor.ownerName,
-        businessName: normalizedPayload.businessName ?? existingVendor.businessName,
-      });
+      const linkedUser = await ensureVendorUserAccount(
+        {
+          email: normalizedPayload.email ?? existingVendor.email,
+          mobile: normalizedPayload.mobile ?? existingVendor.mobile,
+          ownerName: normalizedPayload.ownerName ?? existingVendor.ownerName,
+          businessName: normalizedPayload.businessName ?? existingVendor.businessName,
+        },
+        { excludeVendorId: vendorId },
+      );
       if (linkedUser?._id) {
         normalizedPayload.userId = linkedUser._id;
       }
@@ -1064,10 +1056,7 @@ export const vendorService = {
       });
     }
 
-    if (
-      Array.isArray(normalizedPayload.videoLinks) &&
-      normalizedPayload.videoLinks.length > 0
-    ) {
+    if (Array.isArray(normalizedPayload.videoLinks) && normalizedPayload.videoLinks.length > 0) {
       await galleryService.syncVendorVideoGalleryItems({
         vendorId: String(persistedVendor._id),
         vendorName: String(persistedVendor.businessName ?? "Vendor"),

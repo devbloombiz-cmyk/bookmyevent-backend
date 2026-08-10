@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import mongoose from "mongoose";
+import { VendorModel } from "../models/vendor.model";
 import { env } from "./env";
 import { mongoLogger } from "./logger";
 
@@ -106,6 +107,11 @@ export async function connectToDatabase() {
       heartbeatFrequencyMS: 10000,
       maxPoolSize: 20,
       minPoolSize: 5,
+    });
+
+    // Safely sync VendorModel indexes to apply the partialFilterExpression for userId
+    await VendorModel.syncIndexes().catch((err: unknown) => {
+      mongoLogger.warn({ err }, "VendorModel syncIndexes warning");
     });
   } catch (error) {
     mongoLogger.error({ error }, "MongoDB connection failed during bootstrap");

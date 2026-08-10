@@ -8,8 +8,8 @@ import { getRedisClient } from "../config/redis";
 
 const INTERNAL_BYPASS_SECRET = "EImLgveIFlzQG8gwpZueTc+cnZBIeJKKMtoYQ2DOfzo=";
 
-const API_RATE_LIMIT_PUBLIC_READ_MAX = 2000;
-const API_RATE_LIMIT_SEARCH_MAX = 2000;
+const API_RATE_LIMIT_PUBLIC_READ_MAX = 1000;
+const API_RATE_LIMIT_SEARCH_MAX = 1000;
 const API_RATE_LIMIT_AUTH_MAX = 30;
 const API_RATE_LIMIT_WRITE_MAX = 100;
 const API_RATE_LIMIT_ADMIN_MAX = 1000;
@@ -73,7 +73,7 @@ const wrappedKeyGenerator = (customKeyGen?: (req: Request) => string) => {
   };
 };
 
-// 3. Secure Server-to-Server Bypass Check
+// 3. Secure Server-to-Server & Super Admin Bypass Check
 export function isTrustedInternalRequest(req: Request): boolean {
   if (!INTERNAL_BYPASS_SECRET) {
     return false;
@@ -89,6 +89,26 @@ export function isTrustedInternalRequest(req: Request): boolean {
   const userAgent = req.headers["user-agent"] || "";
   const signatureToken = `BME-Internal-Secret-${INTERNAL_BYPASS_SECRET}`;
   if (userAgent.includes(signatureToken)) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isSuperAdminOrSessionRequest(req: Request): boolean {
+  if (isTrustedInternalRequest(req)) {
+    return true;
+  }
+
+  // A. Skip rate limiting for automatic background SPA session/refresh checks
+  const path = (req.originalUrl || req.path || "").toLowerCase();
+  if (path.includes("/auth/session") || path.includes("/auth/refresh-token")) {
+    return true;
+  }
+
+  // B. Skip rate limiting for Admin roles
+  const role = req.authUser?.role ? String(req.authUser.role).toLowerCase() : "";
+  if (role === "super_admin" || role === "vendor_admin" || role === "accounts_admin") {
     return true;
   }
 
@@ -274,7 +294,7 @@ export const publicReadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
-  skip: isTrustedInternalRequest,
+  skip: isSuperAdminOrSessionRequest,
   store: new RedisRateLimitStore(5 * 60 * 1000, "public_read"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "publicReadLimiter", options);
@@ -292,7 +312,7 @@ export const searchLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
-  skip: isTrustedInternalRequest,
+  skip: isSuperAdminOrSessionRequest,
   store: new RedisRateLimitStore(5 * 60 * 1000, "search"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "searchLimiter", options);
@@ -310,6 +330,7 @@ export const authRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
+  skip: isSuperAdminOrSessionRequest,
   store: new RedisRateLimitStore(5 * 60 * 1000, "auth"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "authRateLimiter", options);
@@ -351,6 +372,7 @@ export const bookingRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
+  skip: isSuperAdminOrSessionRequest,
   store: new RedisRateLimitStore(5 * 60 * 1000, "booking"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "bookingRateLimiter", options);
@@ -368,6 +390,7 @@ export const paymentRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
+  skip: isSuperAdminOrSessionRequest,
   store: new RedisRateLimitStore(5 * 60 * 1000, "payment"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "paymentRateLimiter", options);
@@ -385,6 +408,7 @@ export const adminRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: wrappedKeyGenerator(),
+  skip: isSuperAdminOrSessionRequest,
   store: new RedisRateLimitStore(5 * 60 * 1000, "admin"),
   handler: (req, res, _next, options) => {
     logRateLimitHit(req, "adminRateLimiter", options);

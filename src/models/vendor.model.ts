@@ -69,7 +69,15 @@ const vendorSchema = new Schema(
 );
 
 vendorSchema.index({ category: 1 });
-vendorSchema.index({ userId: 1 }, { unique: true, sparse: true });
+vendorSchema.index(
+  { userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      userId: { $type: "objectId" },
+    },
+  },
+);
 vendorSchema.index({ state: 1, district: 1, city: 1 });
 vendorSchema.index({ city: 1 });
 vendorSchema.index({ subCategory: 1 });
@@ -95,3 +103,9 @@ vendorSchema.index({ referredByVendorId: 1, createdAt: -1 });
 vendorSchema.index({ serviceZones: 1 });
 
 export const VendorModel = model("Vendor", vendorSchema);
+
+// Sync indexes to rebuild userId index in MongoDB with partialFilterExpression
+VendorModel.syncIndexes().catch((err) => {
+  // Ignore index sync warnings if database connection is pending during boot
+  void err;
+});
